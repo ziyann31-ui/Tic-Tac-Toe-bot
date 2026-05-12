@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: tictactoe-bot
+    name: tic-tac-toe-bot
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
@@ -10,4 +10,6 @@ services:
       - key: OWNER_ID
         sync: false
       - key: APP_URL
+        sync: false
+      - key: MONGODB_URI
         sync: false
