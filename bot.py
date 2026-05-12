@@ -2,8 +2,12 @@ import os
 import json
 import asyncio
 import logging
+import random
+import string
 from datetime import datetime
+from threading import Thread
 
+from flask import Flask, send_from_directory
 from pymongo import MongoClient
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
@@ -15,6 +19,21 @@ from telegram.ext import (
     ContextTypes, MessageHandler, filters
 )
 from telegram.constants import ParseMode
+
+# ─── Flask App for Render Web Service ────────
+flask_app = Flask(__name__, static_folder='.')
+
+@flask_app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
+
+@flask_app.route('/<path:path>')
+def serve_file(path):
+    return send_from_directory('.', path)
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    flask_app.run(host='0.0.0.0', port=port)
 
 # ─── Logging ─────────────────────────────────
 logging.basicConfig(
@@ -38,7 +57,6 @@ banned_col = db["banned"]
 stats_col = db["stats"]
 
 def init_db():
-    """Initialize default stats if not present"""
     defaults = [
         {"_id": "total_games", "value": 0},
         {"_id": "total_users", "value": 0},
@@ -48,15 +66,13 @@ def init_db():
     for stat in defaults:
         stats_col.update_one({"_id": stat["_id"]}, {"$setOnInsert": stat}, upsert=True)
 
-    # Create indexes
     games_col.create_index("game_id", unique=True)
     users_col.create_index("user_id", unique=True)
     banned_col.create_index("user_id", unique=True)
-    logger.info("MongoDB initialized and indexes created.")
+    logger.info("MongoDB initialized.")
 
 # ─── Helpers ─────────────────────────────────
 def generate_game_id():
-    import random, string
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 def is_banned(user_id: int) -> bool:
@@ -84,7 +100,6 @@ def ensure_user(user_id, username, first_name):
     )
 
 def update_user_stats(user_id, result, moves=0):
-    """Update user stats after game: win/loss/draw"""
     if result == "win":
         users_col.update_one(
             {"user_id": user_id},
@@ -106,15 +121,12 @@ def update_user_stats(user_id, result, moves=0):
 # ════════════════════════════════════════════
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """NORMAL USERS: Only command they can use. Shows Play button."""
     user = update.effective_user
     if is_banned(user.id):
         await update.message.reply_text("⛔ You are banned from using this bot.")
         return
 
     ensure_user(user.id, user.username, user.first_name)
-
-    # Increment total starts
     stats_col.update_one({"_id": "total_starts"}, {"$inc": {"value": 1}})
 
     bot_username = (await context.bot.get_me()).username
@@ -143,7 +155,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ════════════════════════════════════════════
 
 async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: Full bot statistics"""
     if not is_owner(update.effective_user.id):
         await update.message.reply_text("⛔ This command is restricted to bot owner only.")
         return
@@ -155,7 +166,6 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     waiting_games = games_col.count_documents({"status": "waiting"})
     finished_games = games_col.count_documents({"status": "finished"})
 
-    # Top players
     top_players = list(users_col.find().sort("games_won", -1).limit(5))
 
     text = (
@@ -179,9 +189,8 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def activegames_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: Show all currently active games"""
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("⛔ Owner only command.")
         return
 
     active = list(games_col.find(
@@ -204,9 +213,8 @@ async def activegames_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: List all users with stats"""
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("⛔ Owner only command.")
         return
 
     count = users_col.count_documents({})
@@ -223,9 +231,8 @@ async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def getuser_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: Get detailed user info"""
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("⛔ Owner only command.")
         return
 
     if not context.args:
@@ -262,9 +269,8 @@ async def getuser_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: Broadcast message to all users"""
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("⛔ Owner only command.")
         return
 
     if not context.args:
@@ -288,9 +294,8 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: Ban a user"""
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("⛔ Owner only command.")
         return
 
     if not context.args:
@@ -313,9 +318,8 @@ async def ban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def unban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: Unban a user"""
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("⛔ Owner only command.")
         return
 
     if not context.args:
@@ -334,9 +338,8 @@ async def unban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def maintenance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """OWNER ONLY: Toggle maintenance mode"""
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("⛔ Owner only command.")
         return
 
     context.bot_data["maintenance"] = not context.bot_data.get("maintenance", False)
@@ -349,7 +352,6 @@ async def maintenance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ════════════════════════════════════════════
 
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle inline queries from any chat - Multiple games supported"""
     user = update.effective_user
     if is_banned(user.id):
         await update.inline_query.answer([], cache_time=0)
@@ -357,11 +359,9 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ensure_user(user.id, user.username, user.first_name)
 
-    # Generate unique game ID for EVERY challenge
     game_id = generate_game_id()
     bot_username = (await context.bot.get_me()).username
 
-    # Player 1 (challenger) is RESERVED
     webapp_url = f"{APP_URL}/?game={game_id}&player1={user.id}&name1={user.first_name or user.username or 'Player X'}"
 
     results = [
@@ -381,7 +381,6 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     ]
 
-    # Store game in MongoDB — Player 1 reserved, waiting for Player 2
     games_col.insert_one({
         "game_id": game_id,
         "player1_id": user.id,
@@ -401,7 +400,6 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def chosen_inline_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Track inline message ID for updates"""
     result = update.chosen_inline_result
     if not result:
         return
@@ -418,7 +416,6 @@ async def chosen_inline_result(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle data from Web App (join/game_over)"""
     if not update.message or not update.message.web_app_data:
         return
 
@@ -427,7 +424,6 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = data.get("action")
 
     if action == "join":
-        # Player 2 joined
         player2_id = data.get("player2")
         player2_name = data.get("name2", "Player O")
 
@@ -461,7 +457,6 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         stats_col.update_one({"_id": "total_games"}, {"$inc": {"value": 1}})
 
-        # Update player stats
         p1_id = game["player1_id"]
         p2_id = game.get("player2_id")
 
@@ -473,12 +468,11 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_user_stats(p1_id, "win", p1_moves)
             if p2_id:
                 update_user_stats(p2_id, "loss", p2_moves)
-        else:  # O wins
+        else:
             update_user_stats(p1_id, "loss", p1_moves)
             if p2_id:
                 update_user_stats(p2_id, "win", p2_moves)
 
-        # Update the inline message with result
         inline_msg_id = game.get("inline_message_id")
 
         if inline_msg_id:
@@ -518,12 +512,18 @@ def main():
     if not MONGODB_URI:
         raise ValueError("MONGODB_URI environment variable is required!")
 
+    # Start Flask server in background thread
+    flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    logger.info("Flask server started on background thread.")
+
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
-    # ═══ NORMAL USER COMMANDS ═══
+    # Normal user commands
     app.add_handler(CommandHandler("start", start))
 
-    # ═══ OWNER / ADMIN ONLY COMMANDS ═══
+    # Owner commands
     app.add_handler(CommandHandler("stats", stats_cmd))
     app.add_handler(CommandHandler("activegames", activegames_cmd))
     app.add_handler(CommandHandler("users", users_cmd))
@@ -538,10 +538,9 @@ def main():
     app.add_handler(ChosenInlineResultHandler(chosen_inline_result))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data))
 
-    logger.info("Starting bot...")
+    logger.info("Starting bot polling...")
     app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
     main()
-               
