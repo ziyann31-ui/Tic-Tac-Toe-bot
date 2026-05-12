@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tic Tac Toe</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #1e1e2e;
+    --accent: #7c3aed;
+    --accent2: #06b6d4;
+    --x-color: #f472b6;
+    --o-color: #34d399;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --win-glow: rgba(124, 58, 237, 0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(124,58,237,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,58,237,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    animation: fadeDown 0.5s ease;
+  }
+
+  .title {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* Players */
+  .players {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    animation: fadeUp 0.5s ease 0.1s both;
+  }
+
+  .player {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .player.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(124,58,237,0.2);
+  }
+
+  .player.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  .player-symbol {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Syne', sans-serif;
+  }
+
+  .player-x .player-symbol { color: var(--x-color); }
+  .player-o .player-symbol { color: var(--o-color); }
+
+  .player-name {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .player-score {
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 4px;
+    color: var(--text);
+  }
+
+  .vs {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  /* Status */
+  .status {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    height: 20px;
+    text-align: center;
+    animation: fadeUp 0.5s ease 0.2s both;
+  }
+
+  .status.your-turn { color: var(--accent2); }
+  .status.waiting   { color: var(--muted); }
+  .status.win       { color: var(--o-color); }
+  .status.lose      { color: var(--x-color); }
+  .status.draw      { color: var(--accent); }
+
+  /* Board */
+  .board-wrap {
+    position: relative;
+    animation: scaleIn 0.4s ease 0.3s both;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
+
+  .cell {
+    width: 88px;
+    height: 88px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 800;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .cell:hover:not(.taken):not(.disabled) {
+    border-color: var(--accent);
+    background: rgba(124,58,237,0.05);
+    transform: scale(1.02);
+  }
+
+  .cell:active:not(.taken):not(.disabled) {
+    transform: scale(0.97);
+  }
+
+  .cell.x { color: var(--x-color); animation: popIn 0.2s ease; }
+  .cell.o { color: var(--o-color); animation: popIn 0.2s ease; }
+
+  .cell.win-cell {
+    border-color: var(--accent);
+    background: rgba(124,58,237,0.1);
+    box-shadow: 0 0 15px var(--win-glow);
+    animation: winPulse 0.6s ease;
+  }
+
+  .cell.disabled { cursor: not-allowed; opacity: 0.7; }
+
+  /* Waiting overlay */
+  .waiting-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,15,0.85);
+    border-radius: 20px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    backdrop-filter: blur(4px);
+  }
+
+  .waiting-overlay.show { display: flex; }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .waiting-text {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* Result overlay */
+  .result-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,15,0.9);
+    border-radius: 20px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    backdrop-filter: blur(6px);
+  }
+
+  .result-overlay.show { display: flex; animation: fadeIn 0.4s ease; }
+
+  .result-emoji { font-size: 48px; animation: bounceIn 0.5s ease; }
+
+  .result-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .result-sub {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    animation: fadeUp 0.5s ease 0.4s both;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #5b21b6);
+    color: white;
+    box-shadow: 0 4px 15px rgba(124,58,237,0.3);
+  }
+
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(124,58,237,0.4); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Lobby screen */
+  .lobby {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    animation: fadeUp 0.5s ease;
+  }
+
+  .lobby-icon {
+    font-size: 64px;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .lobby-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+  }
+
+  .lobby-desc {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.8;
+    letter-spacing: 0.5px;
+  }
+
+  .lobby-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 6px 20px rgba(124,58,237,0.3);
+    letter-spacing: 0.5px;
+  }
+
+  .lobby-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(124,58,237,0.4); }
+  .lobby-btn:active { transform: translateY(0); }
+
+  .lobby-info {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .info-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 10px;
+    text-align: center;
+  }
+
+  .info-icon { font-size: 20px; }
+  .info-text { font-size: 10px; color: var(--muted); margin-top: 4px; letter-spacing: 0.5px; line-height: 1.4; }
+
+  /* Animations */
+  @keyframes fadeDown  { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:none; } }
+  @keyframes fadeUp    { from { opacity:0; transform:translateY(16px);  } to { opacity:1; transform:none; } }
+  @keyframes fadeIn    { from { opacity:0; } to { opacity:1; } }
+  @keyframes scaleIn   { from { opacity:0; transform:scale(0.92); } to { opacity:1; transform:scale(1); } }
+  @keyframes popIn     { 0%{transform:scale(0) rotate(-10deg);} 70%{transform:scale(1.1);} 100%{transform:scale(1);} }
+  @keyframes winPulse  { 0%{transform:scale(1);} 50%{transform:scale(1.06);} 100%{transform:scale(1);} }
+  @keyframes bounceIn  { 0%{transform:scale(0);} 60%{transform:scale(1.2);} 100%{transform:scale(1);} }
+  @keyframes spin      { to { transform:rotate(360deg); } }
+  @keyframes float     { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+</style>
+</head>
+<body>
+
+<!-- LOBBY SCREEN -->
+<div class="lobby" id="lobbyScreen">
+  <div class="lobby-icon">⚔️</div>
+  <div class="lobby-title">Tic Tac Toe</div>
+  <div class="lobby-desc">
+    Challenge your friends to a classic<br>game of Tic Tac Toe — right here<br>inside Telegram.
+  </div>
+  <div class="lobby-info">
+    <div class="info-card">
+      <div class="info-icon">👥</div>
+      <div class="info-text">2 Players</div>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">⚡</div>
+      <div class="info-text">Real-time</div>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">🏆</div>
+      <div class="info-text">Best of 3</div>
+    </div>
+  </div>
+  <button class="lobby-btn" onclick="startGame()">Start Game</button>
+</div>
+
+<!-- GAME SCREEN -->
+<div class="container" id="gameScreen" style="display:none;">
+  <div class="header">
+    <div class="title">Tic Tac Toe</div>
+    <div class="subtitle">May the best player win</div>
+  </div>
+
+  <div class="players">
+    <div class="player player-x active" id="playerX">
+      <div class="player-symbol">X</div>
+      <div class="player-name" id="nameX">Player X</div>
+      <div class="player-score" id="scoreX">0</div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="player player-o" id="playerO">
+      <div class="player-symbol">O</div>
+      <div class="player-name" id="nameO">Player O</div>
+      <div class="player-score" id="scoreO">0</div>
+    </div>
+  </div>
+
+  <div class="status your-turn" id="status">Your Turn</div>
+
+  <div class="board-wrap">
+    <div class="board" id="board">
+      <div class="cell" data-i="0" onclick="move(0)"></div>
+      <div class="cell" data-i="1" onclick="move(1)"></div>
+      <div class="cell" data-i="2" onclick="move(2)"></div>
+      <div class="cell" data-i="3" onclick="move(3)"></div>
+      <div class="cell" data-i="4" onclick="move(4)"></div>
+      <div class="cell" data-i="5" onclick="move(5)"></div>
+      <div class="cell" data-i="6" onclick="move(6)"></div>
+      <div class="cell" data-i="7" onclick="move(7)"></div>
+      <div class="cell" data-i="8" onclick="move(8)"></div>
+    </div>
+
+    <div class="waiting-overlay" id="waitingOverlay">
+      <div class="spinner"></div>
+      <div class="waiting-text">Waiting for opponent</div>
+    </div>
+
+    <div class="result-overlay" id="resultOverlay">
+      <div class="result-emoji" id="resultEmoji">🏆</div>
+      <div class="result-text" id="resultText">You Win!</div>
+      <div class="result-sub" id="resultSub">Well played</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="quitGame()">Quit</button>
+    <button class="btn btn-primary" onclick="newRound()" id="newRoundBtn" style="display:none;">Next Round</button>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+// Game state
+let state = {
+  board: Array(9).fill(null),
+  current: 'X',
+  mySymbol: 'X',
+  scores: { X: 0, O: 0 },
+  gameOver: false,
+  round: 1,
+  gameId: null,
+  playerId: null,
+  opponentId: null,
+  names: { X: 'Player X', O: 'Player O' }
+};
+
+const WIN_LINES = [
+  [0,1,2],[3,4,5],[6,7,8],
+  [0,3,6],[1,4,7],[2,5,8],
+  [0,4,8],[2,4,6]
+];
+
+// Get URL params
+const params = new URLSearchParams(window.location.search);
+const gameId   = params.get('game_id');
+const playerId = params.get('player_id');
+const symbol   = params.get('symbol') || 'X';
+const nameX    = params.get('name_x') || 'Player X';
+const nameO    = params.get('name_o') || 'Waiting...';
+const apiUrl   = params.get('api') || '';
+
+function startGame() {
+  document.getElementById('lobbyScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display  = 'flex';
+
+  state.mySymbol  = symbol;
+  state.gameId    = gameId;
+  state.playerId  = playerId;
+  state.names.X   = decodeURIComponent(nameX);
+  state.names.O   = decodeURIComponent(nameO);
+
+  document.getElementById('nameX').textContent = state.names.X;
+  document.getElementById('nameO').textContent = state.names.O;
+
+  updateTurnUI();
+
+  // If O — wait for X to move first
+  if (symbol === 'O') {
+    showWaiting(true);
+    pollState();
+  }
+}
+
+function move(i) {
+  if (state.gameOver) return;
+  if (state.board[i]) return;
+  if (state.current !== state.mySymbol) return;
+
+  state.board[i] = state.mySymbol;
+  renderBoard();
+
+  // Send move to backend
+  if (apiUrl && gameId) {
+    fetch(`${apiUrl}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game_id: gameId, player_id: playerId, cell: i })
+    }).catch(console.error);
+  }
+
+  const result = checkResult();
+  if (result) {
+    handleResult(result);
+  } else {
+    state.current = state.current === 'X' ? 'O' : 'X';
+    updateTurnUI();
+    showWaiting(true);
+    pollState();
+  }
+}
+
+function checkResult() {
+  for (const [a,b,c] of WIN_LINES) {
+    if (state.board[a] && state.board[a] === state.board[b] && state.board[a] === state.board[c]) {
+      return { winner: state.board[a], line: [a,b,c] };
+    }
+  }
+  if (state.board.every(Boolean)) return { winner: null };
+  return null;
+}
+
+function handleResult(result) {
+  state.gameOver = true;
+  showWaiting(false);
+
+  if (result.winner) {
+    result.line.forEach(i => {
+      document.querySelectorAll('.cell')[i].classList.add('win-cell');
+    });
+    state.scores[result.winner]++;
+    document.getElementById('scoreX').textContent = state.scores.X;
+    document.getElementById('scoreO').textContent = state.scores.O;
+
+    if (result.winner === state.mySymbol) {
+      showResult('🏆', 'You Win!', 'Excellent play!', 'win');
+    } else {
+      showResult('😔', 'You Lose', 'Better luck next time', 'lose');
+    }
+  } else {
+    showResult('🤝', "It's a Draw!", 'Great minds think alike', 'draw');
+  }
+
+  document.getElementById('newRoundBtn').style.display = 'block';
+
+  // Notify backend
+  if (apiUrl && gameId) {
+    fetch(`${apiUrl}/result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_id: gameId,
+        winner: result.winner,
+        scores: state.scores
+      })
+    }).catch(console.error);
+  }
+}
+
+function showResult(emoji, text, sub, type) {
+  document.getElementById('resultEmoji').textContent = emoji;
+  document.getElementById('resultText').textContent  = text;
+  document.getElementById('resultSub').textContent   = sub;
+  document.getElementById('resultOverlay').classList.add('show');
+  document.getElementById('status').textContent  = text;
+  document.getElementById('status').className    = `status ${type}`;
+}
+
+function newRound() {
+  state.board    = Array(9).fill(null);
+  state.gameOver = false;
+  state.current  = 'X';
+  state.round++;
+
+  document.getElementById('resultOverlay').classList.remove('show');
+  document.getElementById('newRoundBtn').style.display = 'none';
+  document.querySelectorAll('.cell').forEach(c => {
+    c.className = 'cell'; c.textContent = '';
+  });
+
+  updateTurnUI();
+
+  if (state.mySymbol === 'O') {
+    showWaiting(true);
+    pollState();
+  }
+}
+
+function renderBoard() {
+  document.querySelectorAll('.cell').forEach((cell, i) => {
+    const val = state.board[i];
+    cell.textContent = val || '';
+    cell.className   = `cell${val ? ' ' + val.toLowerCase() + ' taken' : ''}`;
+    if (state.gameOver || state.current !== state.mySymbol) cell.classList.add('disabled');
+  });
+}
+
+function updateTurnUI() {
+  const myTurn = state.current === state.mySymbol && !state.gameOver;
+  document.getElementById('status').textContent = myTurn ? 'Your Turn' : "Opponent's Turn";
+  document.getElementById('status').className   = `status ${myTurn ? 'your-turn' : 'waiting'}`;
+  document.getElementById('playerX').classList.toggle('active', state.current === 'X');
+  document.getElementById('playerO').classList.toggle('active', state.current === 'O');
+  renderBoard();
+}
+
+function showWaiting(show) {
+  document.getElementById('waitingOverlay').classList.toggle('show', show);
+}
+
+// Poll backend for opponent's move
+let pollTimer = null;
+function pollState() {
+  if (!apiUrl || !gameId) return;
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`${apiUrl}/state?game_id=${gameId}`);
+      const data = await r.json();
+      if (data.board) {
+        state.board   = data.board;
+        state.current = data.current;
+        showWaiting(false);
+        renderBoard();
+        const result = checkResult();
+        if (result) { handleResult(result); return; }
+        updateTurnUI();
+        if (state.current !== state.mySymbol) { showWaiting(true); pollState(); }
+      } else { pollState(); }
+    } catch { pollState(); }
+  }, 1500);
+}
+
+function quitGame() {
+  if (tg) tg.close();
+  else document.getElementById('gameScreen').style.display = 'none',
+       document.getElementById('lobbyScreen').style.display = 'flex';
+}
+
+// Auto-start if params exist
+if (gameId && playerId) startGame();
+</script>
+</body>
+</html>
