@@ -123,7 +123,7 @@ def update_user_stats(user_id, result, moves=0):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if is_banned(user.id):
-        await update.message.reply_text("⛔ You are banned from using this bot.")
+        await update.message.reply_text("You are banned from using this bot.")
         return
 
     ensure_user(user.id, user.username, user.first_name)
@@ -132,20 +132,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username
 
     text = (
-        f"🎮 **Want to play Tic Tac Toe with any contact from Telegram?**\n\n"
-        f"It's very easy to do so, click the button below or go to the chat which you "
-        f"want to send the invitation to, type in **@{bot_username}**, and add a space. "
-        f"You can also send the invitation to a group or channel. In that case, the first "
-        f"person to click the **'Join'** button will be your opponent."
+        "Want to play Tic Tac Toe with any contact from Telegram?
+
+"
+        "It's very easy to do so, click the button below or go to the chat which you "
+        "want to send the invitation to, type in @" + bot_username + ", and add a space. "
+        "You can also send the invitation to a group or channel. In that case, the first "
+        "person to click the 'Join' button will be your opponent."
     )
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("▶️ Play", switch_inline_query="")]
+        [InlineKeyboardButton("Play", switch_inline_query="")]
     ])
 
     await update.message.reply_text(
         text,
-        parse_mode=ParseMode.MARKDOWN,
         reply_markup=keyboard
     )
 
@@ -156,7 +157,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ This command is restricted to bot owner only.")
+        await update.message.reply_text("Owner only command.")
         return
 
     total_games = stats_col.find_one({"_id": "total_games"})["value"]
@@ -169,28 +170,42 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top_players = list(users_col.find().sort("games_won", -1).limit(5))
 
     text = (
-        f"📊 **Bot Statistics**\n\n"
-        f"👤 **Users:**\n"
-        f"• Total Users: `{total_users}`\n"
-        f"• Total /start used: `{total_starts}`\n\n"
-        f"🎮 **Games:**\n"
-        f"• Total Games Played: `{total_games}`\n"
-        f"• Currently Active: `{active_games}`\n"
-        f"• Waiting for opponent: `{waiting_games}`\n"
-        f"• Finished: `{finished_games}`\n\n"
-        f"🏆 **Top Players:**"
+        "Bot Statistics
+
+"
+        "Users:
+"
+        "- Total Users: " + str(total_users) + "
+"
+        "- Total /start used: " + str(total_starts) + "
+
+"
+        "Games:
+"
+        "- Total Games Played: " + str(total_games) + "
+"
+        "- Currently Active: " + str(active_games) + "
+"
+        "- Waiting for opponent: " + str(waiting_games) + "
+"
+        "- Finished: " + str(finished_games) + "
+
+"
+        "Top Players:
+"
     )
 
     for i, p in enumerate(top_players, 1):
         name = p.get("first_name") or p.get("username") or "Unknown"
-        text += f"\n{i}. {name} — `{p['games_won']}` wins / `{p['games_played']}` games"
+        text += str(i) + ". " + name + " - " + str(p['games_won']) + " wins / " + str(p['games_played']) + " games
+"
 
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text)
 
 
 async def activegames_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("Owner only command.")
         return
 
     active = list(games_col.find(
@@ -198,45 +213,50 @@ async def activegames_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ).sort("created_at", -1))
 
     if not active:
-        await update.message.reply_text("✅ No active games right now.")
+        await update.message.reply_text("No active games right now.")
         return
 
-    lines = [f"⚡ **Active Games:** `{len(active)}`\n"]
+    lines = ["Active Games: " + str(len(active)) + "
+"]
     for g in active:
         p2 = g.get("player2_name") or "Waiting..."
-        status_emoji = "⏳" if g["status"] == "waiting" else "🎮"
+        status_emoji = "WAITING" if g["status"] == "waiting" else "PLAYING"
         lines.append(
-            f"{status_emoji} `{g['game_id']}` — {g['player1_name']} vs {p2}"
+            "[" + status_emoji + "] " + g['game_id'] + " - " + g['player1_name'] + " vs " + p2
         )
 
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text("
+".join(lines))
 
 
 async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("Owner only command.")
         return
 
     count = users_col.count_documents({})
     recent = list(users_col.find().sort("joined_at", -1).limit(15))
 
-    lines = [f"👥 **Total Users:** `{count}`\n\n**Recent Users:**"]
+    lines = ["Total Users: " + str(count) + "
+
+Recent Users:"]
     for u in recent:
         name = u.get("first_name") or u.get("username") or "Unknown"
         lines.append(
-            f"• `{u['user_id']}` — {name} | 🎮{u['games_played']} 🏆{u['games_won']}"
+            "- " + str(u['user_id']) + " - " + name + " | Games: " + str(u['games_played']) + " Wins: " + str(u['games_won'])
         )
 
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text("
+".join(lines))
 
 
 async def getuser_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("Owner only command.")
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: `/getuser user_id`", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text("Usage: /getuser user_id")
         return
 
     try:
@@ -247,34 +267,45 @@ async def getuser_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = users_col.find_one({"user_id": user_id})
     if not user:
-        await update.message.reply_text("❌ User not found.")
+        await update.message.reply_text("User not found.")
         return
 
     win_rate = round(user.get("games_won", 0) / max(user.get("games_played", 1), 1) * 100, 1)
 
     text = (
-        f"👤 **User Info**\n\n"
-        f"🆔 ID: `{user['user_id']}`\n"
-        f"👤 Name: {user.get('first_name', 'N/A')}\n"
-        f"🔤 Username: @{user.get('username') or 'N/A'}\n"
-        f"🎮 Games Played: `{user.get('games_played', 0)}`\n"
-        f"🏆 Wins: `{user.get('games_won', 0)}`\n"
-        f"😔 Losses: `{user.get('games_lost', 0)}`\n"
-        f"🤝 Draws: `{user.get('games_drawn', 0)}`\n"
-        f"🎯 Win Rate: `{win_rate}%`\n"
-        f"📅 Joined: {user.get('joined_at', 'N/A')[:10]}\n"
-        f"⏰ Last Active: {user.get('last_active', 'N/A')[:16]}"
+        "User Info
+
+"
+        "ID: " + str(user['user_id']) + "
+"
+        "Name: " + str(user.get('first_name', 'N/A')) + "
+"
+        "Username: @" + str(user.get('username') or 'N/A') + "
+"
+        "Games Played: " + str(user.get('games_played', 0)) + "
+"
+        "Wins: " + str(user.get('games_won', 0)) + "
+"
+        "Losses: " + str(user.get('games_lost', 0)) + "
+"
+        "Draws: " + str(user.get('games_drawn', 0)) + "
+"
+        "Win Rate: " + str(win_rate) + "%
+"
+        "Joined: " + str(user.get('joined_at', 'N/A')[:10]) + "
+"
+        "Last Active: " + str(user.get('last_active', 'N/A')[:16])
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(text)
 
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("Owner only command.")
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: `/broadcast Your message here`", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text("Usage: /broadcast Your message here")
         return
 
     message = " ".join(context.args)
@@ -284,22 +315,24 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     failed = 0
     for u in users:
         try:
-            await context.bot.send_message(u["user_id"], f"📢 **Broadcast**\n\n{message}", parse_mode=ParseMode.MARKDOWN)
+            await context.bot.send_message(u["user_id"], "Broadcast:
+
+" + message)
             sent += 1
             await asyncio.sleep(0.05)
         except Exception:
             failed += 1
 
-    await update.message.reply_text(f"✅ Broadcast sent to {sent} users. ❌ Failed: {failed}")
+    await update.message.reply_text("Broadcast sent to " + str(sent) + " users. Failed: " + str(failed))
 
 
 async def ban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("Owner only command.")
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: `/ban user_id`", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text("Usage: /ban user_id")
         return
 
     try:
@@ -314,16 +347,16 @@ async def ban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upsert=True
     )
 
-    await update.message.reply_text(f"🚫 User `{user_id}` has been banned.", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text("User " + str(user_id) + " has been banned.")
 
 
 async def unban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("Owner only command.")
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: `/unban user_id`", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text("Usage: /unban user_id")
         return
 
     try:
@@ -334,17 +367,17 @@ async def unban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     banned_col.delete_one({"user_id": user_id})
 
-    await update.message.reply_text(f"✅ User `{user_id}` has been unbanned.", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text("User " + str(user_id) + " has been unbanned.")
 
 
 async def maintenance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_owner(update.effective_user.id):
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("Owner only command.")
         return
 
     context.bot_data["maintenance"] = not context.bot_data.get("maintenance", False)
-    status = "🔧 ON" if context.bot_data["maintenance"] else "✅ OFF"
-    await update.message.reply_text(f"Maintenance mode: {status}")
+    status = "ON" if context.bot_data["maintenance"] else "OFF"
+    await update.message.reply_text("Maintenance mode: " + status)
 
 
 # ════════════════════════════════════════════
@@ -362,20 +395,23 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game_id = generate_game_id()
     bot_username = (await context.bot.get_me()).username
 
-    webapp_url = f"{APP_URL}/?game={game_id}&player1={user.id}&name1={user.first_name or user.username or 'Player X'}"
+    webapp_url = APP_URL + "/?game=" + game_id + "&player1=" + str(user.id) + "&name1=" + (user.first_name or user.username or "Player X")
 
     results = [
         InlineQueryResultArticle(
             id=game_id,
-            title="🎮 Tic Tac Toe",
-            description=f"Challenge by {user.first_name or 'You'} — Click to play!",
+            title="Tic Tac Toe",
+            description="Challenge by " + (user.first_name or "You") + " - Click to play!",
             input_message_content=InputTextMessageContent(
-                message_text=f"🎮 **{user.first_name or 'Someone'}** has challenged you to a game of **Tic Tac Toe**!\n\n"
-                             f"Click the **Join** button below to accept the challenge and become their opponent.",
-                parse_mode=ParseMode.MARKDOWN
+                message_text=(
+                    (user.first_name or "Someone") + " has challenged you to a game of Tic Tac Toe!
+
+"
+                    "Click the Join button below to accept the challenge and become their opponent."
+                )
             ),
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎮 Join Game", web_app=WebAppInfo(url=webapp_url))]
+                [InlineKeyboardButton("Join Game", web_app=WebAppInfo(url=webapp_url))]
             ]),
             thumb_url="https://cdn-icons-png.flaticon.com/512/566/566294.png"
         )
@@ -412,7 +448,7 @@ async def chosen_inline_result(update: Update, context: ContextTypes.DEFAULT_TYP
         {"$set": {"inline_message_id": inline_msg_id}}
     )
 
-    logger.info(f"Game {game_id} sent with inline_message_id {inline_msg_id}")
+    logger.info("Game " + game_id + " sent with inline_message_id " + str(inline_msg_id))
 
 
 async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -480,20 +516,19 @@ async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             p2_name = game.get("player2_name") or "Player O"
 
             if winner == "draw":
-                text = f"🤝 **It's a draw!** Well played by both players."
+                text = "It's a draw! Well played by both players."
             elif winner == "X":
-                text = f"🏆 **{p1_name}** wins the game! Better luck next time, {p2_name}."
+                text = p1_name + " wins the game! Better luck next time, " + p2_name + "."
             else:
-                text = f"🏆 **{p2_name}** wins the game! Better luck next time, {p1_name}."
+                text = p2_name + " wins the game! Better luck next time, " + p1_name + "."
 
             try:
                 await context.bot.edit_message_text(
                     text,
-                    inline_message_id=inline_msg_id,
-                    parse_mode=ParseMode.MARKDOWN
+                    inline_message_id=inline_msg_id
                 )
             except Exception as e:
-                logger.warning(f"Could not update inline message: {e}")
+                logger.warning("Could not update inline message: " + str(e))
 
 
 # ════════════════════════════════════════════
@@ -512,7 +547,6 @@ def main():
     if not MONGODB_URI:
         raise ValueError("MONGODB_URI environment variable is required!")
 
-    # Start Flask server in background thread
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
