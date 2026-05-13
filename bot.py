@@ -514,8 +514,14 @@ def poll():
                 logging.warning("409 Conflict — another instance running, waiting 15s...")
                 time.sleep(15)
                 continue
-            r.raise_for_status()
-            for upd in r.json().get("result",[]):
+            if r.status_code != 200:
+                time.sleep(5)
+                continue
+            data = r.json()
+            if not data or not isinstance(data, dict):
+                time.sleep(5)
+                continue
+            for upd in data.get("result",[]):
                 last_uid=upd["update_id"]
                 if "message"       in upd: handle_message(upd["message"])
                 if "inline_query"  in upd: handle_inline(upd["inline_query"])
