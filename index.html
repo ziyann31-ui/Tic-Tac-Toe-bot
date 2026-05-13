@@ -1,544 +1,361 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Tic Tac Toe</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            padding: 20px;
-        }
-        .container {
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-        h1 {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .status {
-            font-size: 1.1rem;
-            margin-bottom: 20px;
-            padding: 10px 20px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-        }
-        .players {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            gap: 10px;
-        }
-        .player-card {
-            flex: 1;
-            padding: 12px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 12px;
-            border: 2px solid transparent;
-            transition: all 0.3s ease;
-        }
-        .player-card.active {
-            border-color: #00d4ff;
-            background: rgba(0,212,255,0.1);
-        }
-        .player-card.winner {
-            border-color: #ffd700;
-            background: rgba(255,215,0,0.15);
-        }
-        .player-symbol {
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-        .player-name {
-            font-size: 0.85rem;
-            opacity: 0.8;
-            margin-top: 4px;
-        }
-        .board {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin: 20px 0;
-            padding: 10px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-        }
-        .cell {
-            aspect-ratio: 1;
-            background: rgba(255,255,255,0.08);
-            border: none;
-            border-radius: 12px;
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #fff;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .cell:hover:not(.taken) {
-            background: rgba(255,255,255,0.15);
-            transform: scale(1.05);
-        }
-        .cell.taken {
-            cursor: not-allowed;
-        }
-        .cell.x {
-            color: #00d4ff;
-        }
-        .cell.o {
-            color: #ff6b6b;
-        }
-        .cell.win {
-            animation: pulse 0.5s ease infinite alternate;
-            background: rgba(255,215,0,0.2);
-        }
-        @keyframes pulse {
-            from { transform: scale(1); }
-            to { transform: scale(1.1); }
-        }
-        .btn {
-            padding: 14px 32px;
-            font-size: 1rem;
-            font-weight: 600;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            margin: 5px;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
-            color: #fff;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,212,255,0.3);
-        }
-        .btn-secondary {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-        }
-        .btn-secondary:hover {
-            background: rgba(255,255,255,0.2);
-        }
-        .hidden {
-            display: none !important;
-        }
-        .waiting-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.85);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(255,255,255,0.1);
-            border-top-color: #00d4ff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .result-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.85);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-        .result-overlay.show {
-            display: flex;
-        }
-        .result-icon {
-            font-size: 4rem;
-            margin-bottom: 15px;
-        }
-        .result-text {
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-bottom: 25px;
-        }
-        .join-info {
-            background: rgba(0,212,255,0.1);
-            border: 1px solid rgba(0,212,255,0.3);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-            font-size: 0.9rem;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tic Tac Toe</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');
+  :root {
+    --bg:#0a0a0f;--surface:#13131a;--border:#1e1e2e;
+    --accent:#7c3aed;--accent2:#06b6d4;
+    --x:#f472b6;--o:#34d399;--text:#e2e8f0;--muted:#64748b;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;padding:20px;overflow:hidden;}
+  body::before{content:'';position:fixed;inset:0;
+    background-image:linear-gradient(rgba(124,58,237,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(124,58,237,.03) 1px,transparent 1px);
+    background-size:40px 40px;pointer-events:none;}
+
+  /* WAITING SCREEN */
+  .waiting-screen{width:100%;max-width:340px;display:flex;flex-direction:column;
+    align-items:center;gap:24px;text-align:center;animation:fadeUp .5s ease;}
+  .wait-icon{font-size:64px;animation:float 3s ease-in-out infinite;}
+  .wait-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .wait-sub{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+  .wait-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:20px;width:100%;}
+  .wait-card-title{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;}
+  .wait-player{display:flex;align-items:center;gap:12px;padding:10px 0;}
+  .wait-player+.wait-player{border-top:1px solid var(--border);}
+  .wait-sym{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;
+    justify-content:center;font-family:'Syne',sans-serif;font-size:18px;font-weight:800;}
+  .wait-sym.x{background:rgba(244,114,182,.1);color:var(--x);}
+  .wait-sym.o{background:rgba(52,211,153,.1);color:var(--o);}
+  .wait-name{font-size:13px;font-weight:700;}
+  .wait-name.muted{color:var(--muted);}
+  .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);
+    margin-left:auto;animation:pulse 1.5s ease-in-out infinite;}
+  .spinner-row{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;
+    letter-spacing:1px;text-transform:uppercase;}
+  .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);
+    border-radius:50%;animation:spin .8s linear infinite;}
+
+  /* GAME SCREEN */
+  .game-screen{width:100%;max-width:360px;display:flex;flex-direction:column;
+    align-items:center;gap:20px;}
+  .header{text-align:center;animation:fadeDown .5s ease;}
+  .title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .subtitle{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}
+  .players{display:flex;align-items:center;gap:12px;width:100%;animation:fadeUp .5s ease .1s both;}
+  .player{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:12px;text-align:center;transition:all .3s;position:relative;overflow:hidden;}
+  .player.active{border-color:var(--accent);box-shadow:0 0 20px rgba(124,58,237,.2);}
+  .player.active::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));}
+  .player-sym{font-size:22px;font-weight:700;font-family:'Syne',sans-serif;}
+  .player-x .player-sym{color:var(--x);}
+  .player-o .player-sym{color:var(--o);}
+  .player-name{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:1px;
+    text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .player-score{font-size:18px;font-weight:700;margin-top:4px;}
+  .vs{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1px;}
+  .status{font-size:13px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;
+    height:20px;text-align:center;animation:fadeUp .5s ease .2s both;}
+  .status.your-turn{color:var(--accent2);}
+  .status.win{color:var(--o);}
+  .status.lose{color:var(--x);}
+  .status.draw{color:var(--accent);}
+  .board-wrap{position:relative;animation:scaleIn .4s ease .3s both;}
+  .board{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:16px;
+    background:var(--surface);border:1px solid var(--border);border-radius:20px;}
+  .cell{width:88px;height:88px;background:var(--bg);border:1px solid var(--border);
+    border-radius:12px;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;transition:all .2s;font-family:'Syne',sans-serif;font-size:36px;
+    font-weight:800;user-select:none;}
+  .cell:hover:not(.taken):not(.disabled){border-color:var(--accent);
+    background:rgba(124,58,237,.05);transform:scale(1.02);}
+  .cell:active:not(.taken):not(.disabled){transform:scale(.97);}
+  .cell.x{color:var(--x);animation:popIn .2s ease;}
+  .cell.o{color:var(--o);animation:popIn .2s ease;}
+  .cell.win-cell{border-color:var(--accent);background:rgba(124,58,237,.1);
+    box-shadow:0 0 15px rgba(124,58,237,.4);animation:winPulse .6s ease;}
+  .cell.disabled{cursor:not-allowed;opacity:.7;}
+  .result-overlay{display:none;position:absolute;inset:0;background:rgba(10,10,15,.9);
+    border-radius:20px;align-items:center;justify-content:center;flex-direction:column;
+    gap:8px;backdrop-filter:blur(6px);}
+  .result-overlay.show{display:flex;animation:fadeIn .4s ease;}
+  .result-emoji{font-size:48px;animation:bounceIn .5s ease;}
+  .result-text{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;text-align:center;}
+  .result-sub{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
+  .btn-row{display:flex;gap:10px;width:100%;animation:fadeUp .5s ease .4s both;}
+  .btn{flex:1;padding:14px;border-radius:12px;border:none;font-family:'Space Mono',monospace;
+    font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .2s;}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),#5b21b6);color:white;
+    box-shadow:0 4px 15px rgba(124,58,237,.3);}
+  .btn-primary:hover{transform:translateY(-1px);}
+  .btn-secondary{background:var(--surface);color:var(--muted);border:1px solid var(--border);}
+  .btn-secondary:hover{border-color:var(--accent);color:var(--text);}
+
+  @keyframes fadeDown{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:none}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes scaleIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+  @keyframes popIn{0%{transform:scale(0) rotate(-10deg)}70%{transform:scale(1.1)}100%{transform:scale(1)}}
+  @keyframes winPulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+  @keyframes bounceIn{0%{transform:scale(0)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+</style>
 </head>
 <body>
-    <div class="waiting-overlay" id="waitingOverlay">
-        <div class="spinner"></div>
-        <p id="waitingText">Waiting for opponent to join...</p>
-        <div class="join-info" id="joinInfo">
-            <p>👤 <strong>Player X:</strong> <span id="hostName">Host</span></p>
-            <p style="margin-top: 8px; opacity: 0.8;">Share this chat so someone can click Join!</p>
-        </div>
-    </div>
 
+<!-- WAITING SCREEN -->
+<div class="waiting-screen" id="waitingScreen">
+  <div class="wait-icon">⚔️</div>
+  <div>
+    <div class="wait-title">Tic Tac Toe</div>
+    <div class="wait-sub" style="margin-top:6px">Waiting for opponent...</div>
+  </div>
+  <div class="wait-card">
+    <div class="wait-card-title">Players</div>
+    <div class="wait-player">
+      <div class="wait-sym x" id="wsymX">X</div>
+      <div class="wait-name" id="wnameX">Player X</div>
+      <div class="pulse-dot" style="background:var(--o)"></div>
+    </div>
+    <div class="wait-player">
+      <div class="wait-sym o" id="wsymO">O</div>
+      <div class="wait-name muted" id="wnameO">Waiting...</div>
+      <div class="pulse-dot"></div>
+    </div>
+  </div>
+  <div class="spinner-row">
+    <div class="spinner"></div>
+    <span>Waiting for opponent to join</span>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div class="game-screen" id="gameScreen" style="display:none">
+  <div class="header">
+    <div class="title">Tic Tac Toe</div>
+    <div class="subtitle">May the best player win</div>
+  </div>
+  <div class="players">
+    <div class="player player-x active" id="playerX">
+      <div class="player-sym">X</div>
+      <div class="player-name" id="nameX">Player X</div>
+      <div class="player-score" id="scoreX">0</div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="player player-o" id="playerO">
+      <div class="player-sym">O</div>
+      <div class="player-name" id="nameO">Player O</div>
+      <div class="player-score" id="scoreO">0</div>
+    </div>
+  </div>
+  <div class="status your-turn" id="status">Your Turn</div>
+  <div class="board-wrap">
+    <div class="board" id="board">
+      <div class="cell" data-i="0" onclick="move(0)"></div>
+      <div class="cell" data-i="1" onclick="move(1)"></div>
+      <div class="cell" data-i="2" onclick="move(2)"></div>
+      <div class="cell" data-i="3" onclick="move(3)"></div>
+      <div class="cell" data-i="4" onclick="move(4)"></div>
+      <div class="cell" data-i="5" onclick="move(5)"></div>
+      <div class="cell" data-i="6" onclick="move(6)"></div>
+      <div class="cell" data-i="7" onclick="move(7)"></div>
+      <div class="cell" data-i="8" onclick="move(8)"></div>
+    </div>
     <div class="result-overlay" id="resultOverlay">
-        <div class="result-icon" id="resultIcon">🏆</div>
-        <div class="result-text" id="resultText">You Win!</div>
-        <button class="btn btn-primary" onclick="closeGame()">Close</button>
+      <div class="result-emoji" id="resultEmoji">🏆</div>
+      <div class="result-text" id="resultText">You Win!</div>
+      <div class="result-sub" id="resultSub">Well played</div>
     </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="quitGame()">Quit</button>
+    <button class="btn btn-primary" id="newRoundBtn" style="display:none" onclick="newRound()">Next Round</button>
+  </div>
+</div>
 
-    <div class="container" id="gameContainer">
-        <h1>🎮 Tic Tac Toe</h1>
-        <div class="status" id="status">Your turn!</div>
+<script>
+const tg = window.Telegram?.WebApp;
+if(tg){tg.ready();tg.expand();}
 
-        <div class="players">
-            <div class="player-card active" id="playerX">
-                <div class="player-symbol">❌</div>
-                <div class="player-name" id="nameX">Player X</div>
-            </div>
-            <div class="player-card" id="playerO">
-                <div class="player-symbol">⭕</div>
-                <div class="player-name" id="nameO">Waiting...</div>
-            </div>
-        </div>
+const params   = new URLSearchParams(window.location.search);
+const gameId   = params.get('game_id');
+const playerId = params.get('player_id');
+const symbol   = params.get('symbol')||'X';
+const nameX    = decodeURIComponent(params.get('name_x')||'Player X');
+const nameO    = decodeURIComponent(params.get('name_o')||'Waiting...');
+const apiUrl   = params.get('api')||'';
 
-        <div class="board" id="board">
-            <button class="cell" data-index="0" onclick="makeMove(0)"></button>
-            <button class="cell" data-index="1" onclick="makeMove(1)"></button>
-            <button class="cell" data-index="2" onclick="makeMove(2)"></button>
-            <button class="cell" data-index="3" onclick="makeMove(3)"></button>
-            <button class="cell" data-index="4" onclick="makeMove(4)"></button>
-            <button class="cell" data-index="5" onclick="makeMove(5)"></button>
-            <button class="cell" data-index="6" onclick="makeMove(6)"></button>
-            <button class="cell" data-index="7" onclick="makeMove(7)"></button>
-            <button class="cell" data-index="8" onclick="makeMove(8)"></button>
-        </div>
+const WIN_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
-        <div>
-            <button class="btn btn-secondary" onclick="resetGame()">🔄 New Game</button>
-            <button class="btn btn-primary" onclick="closeGame()">✅ Done</button>
-        </div>
-    </div>
+let state={
+  board:Array(9).fill(null),current:'X',mySymbol:symbol,
+  scores:{X:0,O:0},gameOver:false,names:{X:nameX,O:nameO}
+};
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
+// Init waiting screen
+document.getElementById('wnameX').textContent = nameX;
+document.getElementById('wnameO').textContent = nameO;
 
-        // Parse URL params
-        const params = new URLSearchParams(window.location.search);
-        const gameId = params.get('game') || 'solo_' + Date.now();
-        const player1Id = params.get('player1');
-        const name1 = params.get('name1') || 'Player X';
-        const mode = params.get('mode') || 'multi';
+// If both players present — go to game directly
+if(nameO !== 'Waiting...'){
+  startGame();
+} else {
+  // Poll for opponent
+  pollWaiting();
+}
 
-        let board = ['', '', '', '', '', '', '', '', ''];
-        let currentPlayer = 'X';
-        let mySymbol = 'X';
-        let gameActive = true;
-        let player2Joined = false;
-        let player2Name = 'Waiting...';
-        let myId = tg.initDataUnsafe?.user?.id;
-        let myName = tg.initDataUnsafe?.user?.first_name || 'You';
-        let p1Moves = 0;
-        let p2Moves = 0;
+function startGame(){
+  document.getElementById('waitingScreen').style.display='none';
+  document.getElementById('gameScreen').style.display='flex';
+  document.getElementById('nameX').textContent = state.names.X;
+  document.getElementById('nameO').textContent = state.names.O;
+  updateTurnUI();
+  if(symbol==='O') pollState();
+}
 
-        // Initialize
-        document.getElementById('nameX').textContent = name1;
-        document.getElementById('hostName').textContent = name1;
+function move(i){
+  if(state.gameOver||state.board[i]||state.current!==state.mySymbol) return;
+  state.board[i]=state.mySymbol;
+  renderBoard();
+  if(apiUrl&&gameId){
+    fetch(`${apiUrl}/move`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({game_id:gameId,player_id:playerId,cell:i})
+    }).catch(console.error);
+  }
+  const res=checkResult();
+  if(res){handleResult(res);}
+  else{state.current=state.current==='X'?'O':'X';updateTurnUI();pollState();}
+}
 
-        // Determine if I'm Player 1 (host) or Player 2 (joiner)
-        if (player1Id && myId && myId.toString() === player1Id.toString()) {
-            // I am the host (Player 1) - RESERVED
-            mySymbol = 'X';
-            document.getElementById('waitingText').textContent = 'Waiting for opponent to click Join...';
-            document.getElementById('waitingOverlay').classList.remove('hidden');
+function checkResult(){
+  for(const[a,b,c]of WIN_LINES){
+    if(state.board[a]&&state.board[a]===state.board[b]&&state.board[a]===state.board[c])
+      return{winner:state.board[a],line:[a,b,c]};
+  }
+  if(state.board.every(Boolean))return{winner:null};
+  return null;
+}
 
-            // Poll for opponent
-            startPollingForOpponent();
-        } else {
-            // I am joining as Player 2
-            mySymbol = 'O';
-            player2Joined = true;
-            player2Name = myName;
-            document.getElementById('nameO').textContent = myName;
-            document.getElementById('waitingOverlay').classList.add('hidden');
+function handleResult(res){
+  state.gameOver=true;
+  if(res.winner){
+    res.line.forEach(i=>document.querySelectorAll('.cell')[i].classList.add('win-cell'));
+    state.scores[res.winner]++;
+    document.getElementById('scoreX').textContent=state.scores.X;
+    document.getElementById('scoreO').textContent=state.scores.O;
+    if(res.winner===state.mySymbol) showResult('🏆','You Win!','Excellent play!','win');
+    else showResult('😔','You Lose','Better luck next time','lose');
+  } else {
+    showResult('🤝',"It's a Draw!",'Great minds think alike','draw');
+  }
+  document.getElementById('newRoundBtn').style.display='block';
+  if(apiUrl&&gameId){
+    fetch(`${apiUrl}/result`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({game_id:gameId,winner:res.winner,scores:state.scores})
+    }).catch(console.error);
+  }
+}
 
-            // Notify bot that I joined
-            sendData({
-                action: 'join', 
-                game_id: gameId, 
-                player2: myId, 
-                name2: myName
-            });
-        }
+function showResult(emoji,text,sub,type){
+  document.getElementById('resultEmoji').textContent=emoji;
+  document.getElementById('resultText').textContent=text;
+  document.getElementById('resultSub').textContent=sub;
+  document.getElementById('resultOverlay').classList.add('show');
+  document.getElementById('status').textContent=text;
+  document.getElementById('status').className=`status ${type}`;
+}
 
-        // Polling for opponent (for host)
-        function startPollingForOpponent() {
-            const pollInterval = setInterval(() => {
-                if (player2Joined) {
-                    clearInterval(pollInterval);
-                    return;
-                }
-            }, 2000);
+function newRound(){
+  state.board=Array(9).fill(null);state.gameOver=false;state.current='X';
+  document.getElementById('resultOverlay').classList.remove('show');
+  document.getElementById('newRoundBtn').style.display='none';
+  document.querySelectorAll('.cell').forEach(c=>{c.className='cell';c.textContent='';});
+  updateTurnUI();
+  if(state.mySymbol==='O') pollState();
+}
 
-            // Auto-hide waiting after some time if playing solo
-            if (mode === 'solo') {
-                setTimeout(() => {
-                    player2Joined = true;
-                    player2Name = 'Bot';
-                    document.getElementById('nameO').textContent = 'Bot';
-                    document.getElementById('waitingOverlay').classList.add('hidden');
-                }, 1000);
-            }
-        }
+function renderBoard(){
+  document.querySelectorAll('.cell').forEach((cell,i)=>{
+    const val=state.board[i];
+    cell.textContent=val||'';
+    cell.className=`cell${val?' '+val.toLowerCase()+' taken':''}`;
+    if(state.gameOver||state.current!==state.mySymbol) cell.classList.add('disabled');
+  });
+}
 
-        function makeMove(index) {
-            if (!gameActive || board[index] !== '') return;
-            if (!player2Joined && mode !== 'solo') {
-                tg.showAlert('Waiting for opponent to join...');
-                return;
-            }
+function updateTurnUI(){
+  const myTurn=state.current===state.mySymbol&&!state.gameOver;
+  document.getElementById('status').textContent=myTurn?'Your Turn':"Opponent's Turn";
+  document.getElementById('status').className=`status ${myTurn?'your-turn':'waiting'}`;
+  document.getElementById('playerX').classList.toggle('active',state.current==='X');
+  document.getElementById('playerO').classList.toggle('active',state.current==='O');
+  renderBoard();
+}
 
-            // Only allow if it's my turn
-            if (currentPlayer !== mySymbol) {
-                tg.showAlert("It's not your turn!");
-                return;
-            }
+// Poll waiting screen for opponent
+let waitPollTimer=null;
+function pollWaiting(){
+  if(!apiUrl||!gameId) return;
+  clearTimeout(waitPollTimer);
+  waitPollTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch(`${apiUrl}/state?game_id=${gameId}`);
+      const data=await r.json();
+      if(data.status==='playing'){
+        // Opponent joined! Update name and start game
+        const oName = data.players?.[symbol==='X'?'O':'X']?.name||'Opponent';
+        if(symbol==='X') state.names.O=oName;
+        else state.names.X=oName;
+        startGame();
+      } else { pollWaiting(); }
+    } catch{ pollWaiting(); }
+  },2000);
+}
 
-            board[index] = currentPlayer;
-            updateCell(index, currentPlayer);
+// Poll for opponent's move
+let pollTimer=null;
+function pollState(){
+  if(!apiUrl||!gameId) return;
+  clearTimeout(pollTimer);
+  pollTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch(`${apiUrl}/state?game_id=${gameId}`);
+      const data=await r.json();
+      if(data.board){
+        state.board=data.board;state.current=data.current;
+        renderBoard();
+        const res=checkResult();
+        if(res){handleResult(res);return;}
+        updateTurnUI();
+        if(state.current!==state.mySymbol) pollState();
+      } else pollState();
+    } catch{ pollState(); }
+  },1500);
+}
 
-            // Track moves
-            if (currentPlayer === 'X') p1Moves++;
-            else p2Moves++;
-
-            const winner = checkWinner();
-            if (winner) {
-                gameActive = false;
-                highlightWin(winner.line);
-                showResult(winner.winner);
-                sendData({
-                    action: 'game_over', 
-                    game_id: gameId, 
-                    winner: winner.winner,
-                    p1_moves: p1Moves,
-                    p2_moves: p2Moves
-                });
-                return;
-            }
-
-            if (board.every(cell => cell !== '')) {
-                gameActive = false;
-                showResult('draw');
-                sendData({
-                    action: 'game_over', 
-                    game_id: gameId, 
-                    winner: 'draw',
-                    p1_moves: p1Moves,
-                    p2_moves: p2Moves
-                });
-                return;
-            }
-
-            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
-            updateStatus();
-
-            // Bot move in solo mode
-            if (mode === 'solo' && currentPlayer === 'O') {
-                setTimeout(botMove, 600);
-            }
-        }
-
-        function botMove() {
-            if (!gameActive) return;
-            const move = getBestMove();
-            board[move] = 'O';
-            updateCell(move, 'O');
-            p2Moves++;
-
-            const winner = checkWinner();
-            if (winner) {
-                gameActive = false;
-                highlightWin(winner.line);
-                showResult(winner.winner);
-                return;
-            }
-
-            if (board.every(cell => cell !== '')) {
-                gameActive = false;
-                showResult('draw');
-                return;
-            }
-
-            currentPlayer = 'X';
-            updateStatus();
-        }
-
-        function getBestMove() {
-            // Try to win
-            for (let i = 0; i < 9; i++) {
-                if (board[i] === '') {
-                    board[i] = 'O';
-                    if (checkWinner()?.winner === 'O') {
-                        board[i] = '';
-                        return i;
-                    }
-                    board[i] = '';
-                }
-            }
-            // Block opponent
-            for (let i = 0; i < 9; i++) {
-                if (board[i] === '') {
-                    board[i] = 'X';
-                    if (checkWinner()?.winner === 'X') {
-                        board[i] = '';
-                        return i;
-                    }
-                    board[i] = '';
-                }
-            }
-            // Take center
-            if (board[4] === '') return 4;
-            // Take corners
-            const corners = [0, 2, 6, 8].filter(i => board[i] === '');
-            if (corners.length) return corners[Math.floor(Math.random() * corners.length)];
-            // Take any available
-            const available = board.map((v, i) => v === '' ? i : null).filter(v => v !== null);
-            return available[Math.floor(Math.random() * available.length)];
-        }
-
-        function updateCell(index, player) {
-            const cell = document.querySelector(`[data-index="${index}"]`);
-            cell.textContent = player === 'X' ? '❌' : '⭕';
-            cell.classList.add('taken', player.toLowerCase());
-        }
-
-        function updateStatus() {
-            const statusEl = document.getElementById('status');
-            const isMyTurn = currentPlayer === mySymbol;
-
-            if (!player2Joined && mode !== 'solo') {
-                statusEl.textContent = "Waiting for opponent...";
-            } else {
-                statusEl.textContent = isMyTurn ? "Your turn!" : "Opponent's turn...";
-            }
-
-            document.getElementById('playerX').classList.toggle('active', currentPlayer === 'X');
-            document.getElementById('playerO').classList.toggle('active', currentPlayer === 'O');
-        }
-
-        function checkWinner() {
-            const lines = [
-                [0,1,2], [3,4,5], [6,7,8],
-                [0,3,6], [1,4,7], [2,5,8],
-                [0,4,8], [2,4,6]
-            ];
-            for (const line of lines) {
-                const [a, b, c] = line;
-                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-                    return {winner: board[a], line};
-                }
-            }
-            if (board.every(cell => cell !== '')) {
-                return {winner: 'draw', line: null};
-            }
-            return null;
-        }
-
-        function highlightWin(line) {
-            if (!line) return;
-            for (const idx of line) {
-                document.querySelector(`[data-index="${idx}"]`).classList.add('win');
-            }
-        }
-
-        function showResult(result) {
-            const overlay = document.getElementById('resultOverlay');
-            const icon = document.getElementById('resultIcon');
-            const text = document.getElementById('resultText');
-
-            if (result === 'draw') {
-                icon.textContent = '🤝';
-                text.textContent = "It's a draw! Well played.";
-            } else if (result === mySymbol) {
-                icon.textContent = '🏆';
-                text.textContent = 'You Win! Congratulations!';
-            } else {
-                icon.textContent = '😔';
-                text.textContent = 'You Lose! Better luck next time.';
-            }
-
-            overlay.classList.add('show');
-        }
-
-        function resetGame() {
-            board = ['', '', '', '', '', '', '', '', ''];
-            currentPlayer = 'X';
-            gameActive = true;
-            p1Moves = 0;
-            p2Moves = 0;
-
-            document.querySelectorAll('.cell').forEach(cell => {
-                cell.textContent = '';
-                cell.className = 'cell';
-            });
-
-            document.getElementById('resultOverlay').classList.remove('show');
-            updateStatus();
-
-            if (mode === 'solo' && mySymbol === 'O') {
-                setTimeout(botMove, 600);
-            }
-        }
-
-        function closeGame() {
-            tg.close();
-        }
-
-        function sendData(data) {
-            if (tg.sendData) {
-                tg.sendData(JSON.stringify(data));
-            }
-        }
-
-        // Initialize status
-        updateStatus();
-    </script>
+// Also expose game state in /state endpoint (add players)
+function quitGame(){
+  if(tg) tg.close();
+  else location.reload();
+}
+</script>
 </body>
 </html>
