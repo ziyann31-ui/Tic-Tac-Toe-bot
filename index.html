@@ -193,13 +193,14 @@
 const tg = window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();}
 
+// Use server-injected globals if available, fallback to URL params
 const params   = new URLSearchParams(window.location.search);
-const gameId   = params.get('game_id');
-const playerId = params.get('player_id');
-const symbol   = params.get('symbol')||'X';
-const nameX    = decodeURIComponent(params.get('name_x')||'Player X');
-const nameO    = decodeURIComponent(params.get('name_o')||'Waiting...');
-const apiUrl   = params.get('api')||'';
+const gameId   = window._GAME_ID   || params.get('game_id');
+const playerId = window._PLAYER_ID || params.get('player_id');
+const symbol   = window._SYMBOL    || params.get('symbol')||'X';
+const nameX    = window._NAME_X    || decodeURIComponent(params.get('name_x')||'Player X');
+const nameO    = window._NAME_O    || decodeURIComponent(params.get('name_o')||'Waiting...');
+const apiUrl   = window._API_URL   || params.get('api')||'';
 
 const WIN_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
