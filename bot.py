@@ -311,7 +311,14 @@ def handle_callback(cb):
 
     if not game:          answer_cb(cb["id"],"Game not found.",True); return
     if uid in banned:     answer_cb(cb["id"],"You are banned.",True); return
-    if str(uid)==creator_id: answer_cb(cb["id"],"You cannot join your own game!",True); return
+
+    # Creator can open their own game
+    if str(uid)==str(creator_id):
+        c_sym    = game.get("creator_sym","X")
+        game_url = f"{APP_URL}/game/{gid}?pid={uid}"
+        api("answerCallbackQuery", callback_query_id=cb["id"], url=game_url)
+        return
+
     if game["status"]!="waiting": answer_cb(cb["id"],"This game is already in progress.",True); return
 
     # Assign joiner the remaining symbol
@@ -503,6 +510,10 @@ def poll():
     while True:
         try:
             r=requests.get(f"{BASE_URL}/getUpdates",params={"offset":last_uid+1,"timeout":30},timeout=40)
+            if r.status_code == 409:
+                logging.warning("409 Conflict — another instance running, waiting 15s...")
+                time.sleep(15)
+                continue
             r.raise_for_status()
             for upd in r.json().get("result",[]):
                 last_uid=upd["update_id"]
