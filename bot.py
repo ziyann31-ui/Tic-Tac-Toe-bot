@@ -1,580 +1,491 @@
-import os
-import json
-import asyncio
-import logging
-import random
-import string
+#!/usr/bin/env python3
+import os, time, uuid, logging, requests, threading, json, random
 from datetime import datetime
-from threading import Thread
-
-from flask import Flask, send_from_directory
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 from pymongo import MongoClient
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    InlineQueryResultArticle, InputTextMessageContent, WebAppInfo
-)
-from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler,
-    InlineQueryHandler, ChosenInlineResultHandler,
-    ContextTypes, MessageHandler, filters
-)
-from telegram.constants import ParseMode
 
-# ─── Flask App for Render Web Service ────────
-flask_app = Flask(__name__, static_folder='.')
+# ============================================================
+#                     CONFIG
+# ============================================================
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
+OWNER_ID   = int(os.environ.get("OWNER_ID", "6779799030"))
+APP_URL    = os.environ.get("APP_URL", "https://your-app.onrender.com")
+MONGO_URI  = os.environ.get("MONGO_URI", "")
+BASE_URL   = f"https://api.telegram.org/bot{BOT_TOKEN}"
+BOT_USERNAME = ""
 
-@flask_app.route('/')
-def index():
-    return send_from_directory('.', 'index.html')
-
-@flask_app.route('/<path:path>')
-def serve_file(path):
-    return send_from_directory('.', path)
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    flask_app.run(host='0.0.0.0', port=port)
-
-# ─── Logging ─────────────────────────────────
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# ─── Config ──────────────────────────────────
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = int(os.getenv("OWNER_ID", "0"))
-APP_URL = os.getenv("APP_URL", "").rstrip("/")
-MONGODB_URI = os.getenv("MONGODB_URI", "")
-
-# ─── MongoDB Setup ───────────────────────────
-client = MongoClient(MONGODB_URI)
-db = client["tictactoe_bot"]
-games_col = db["games"]
-users_col = db["users"]
-banned_col = db["banned"]
-stats_col = db["stats"]
+# ============================================================
+#                     MONGODB
+# ============================================================
+db_client = None
+db        = None
 
 def init_db():
-    defaults = [
-        {"_id": "total_games", "value": 0},
-        {"_id": "total_users", "value": 0},
-        {"_id": "active_games", "value": 0},
-        {"_id": "total_starts", "value": 0}
-    ]
-    for stat in defaults:
-        stats_col.update_one({"_id": stat["_id"]}, {"$setOnInsert": stat}, upsert=True)
-
-    games_col.create_index("game_id", unique=True)
-    users_col.create_index("user_id", unique=True)
-    banned_col.create_index("user_id", unique=True)
-    logger.info("MongoDB initialized.")
-
-# ─── Helpers ─────────────────────────────────
-def generate_game_id():
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
-
-def is_banned(user_id: int) -> bool:
-    return banned_col.find_one({"user_id": user_id}) is not None
-
-def is_owner(user_id: int) -> bool:
-    return user_id == OWNER_ID
-
-def ensure_user(user_id, username, first_name):
-    users_col.update_one(
-        {"user_id": user_id},
-        {"$setOnInsert": {
-            "user_id": user_id,
-            "username": username or "",
-            "first_name": first_name or "",
-            "games_played": 0,
-            "games_won": 0,
-            "games_drawn": 0,
-            "games_lost": 0,
-            "total_moves": 0,
-            "joined_at": datetime.now().isoformat()
-        },
-        "$set": {"last_active": datetime.now().isoformat()}},
-        upsert=True
-    )
-
-def update_user_stats(user_id, result, moves=0):
-    if result == "win":
-        users_col.update_one(
-            {"user_id": user_id},
-            {"$inc": {"games_played": 1, "games_won": 1, "total_moves": moves}}
-        )
-    elif result == "loss":
-        users_col.update_one(
-            {"user_id": user_id},
-            {"$inc": {"games_played": 1, "games_lost": 1, "total_moves": moves}}
-        )
-    elif result == "draw":
-        users_col.update_one(
-            {"user_id": user_id},
-            {"$inc": {"games_played": 1, "games_drawn": 1, "total_moves": moves}}
-        )
-
-# ════════════════════════════════════════════
-# NORMAL USER COMMANDS (Only /start)
-# ════════════════════════════════════════════
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if is_banned(user.id):
-        await update.message.reply_text("You are banned from using this bot.")
+    global db_client, db
+    if not MONGO_URI:
+        logging.warning("No MONGO_URI — using in-memory storage")
         return
-
-    ensure_user(user.id, user.username, user.first_name)
-    stats_col.update_one({"_id": "total_starts"}, {"$inc": {"value": 1}})
-
-    bot_username = (await context.bot.get_me()).username
-
-    text = (
-        "Want to play Tic Tac Toe with any contact from Telegram?
-
-"
-        "It's very easy to do so, click the button below or go to the chat which you "
-        "want to send the invitation to, type in @" + bot_username + ", and add a space. "
-        "You can also send the invitation to a group or channel. In that case, the first "
-        "person to click the 'Join' button will be your opponent."
-    )
-
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Play", switch_inline_query="")]
-    ])
-
-    await update.message.reply_text(
-        text,
-        reply_markup=keyboard
-    )
-
-
-# ════════════════════════════════════════════
-# OWNER / ADMIN ONLY COMMANDS
-# ════════════════════════════════════════════
-
-async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
-        return
-
-    total_games = stats_col.find_one({"_id": "total_games"})["value"]
-    total_starts = stats_col.find_one({"_id": "total_starts"})["value"]
-    total_users = users_col.count_documents({})
-    active_games = games_col.count_documents({"status": {"$in": ["waiting", "playing"]}})
-    waiting_games = games_col.count_documents({"status": "waiting"})
-    finished_games = games_col.count_documents({"status": "finished"})
-
-    top_players = list(users_col.find().sort("games_won", -1).limit(5))
-
-    text = (
-        "Bot Statistics
-
-"
-        "Users:
-"
-        "- Total Users: " + str(total_users) + "
-"
-        "- Total /start used: " + str(total_starts) + "
-
-"
-        "Games:
-"
-        "- Total Games Played: " + str(total_games) + "
-"
-        "- Currently Active: " + str(active_games) + "
-"
-        "- Waiting for opponent: " + str(waiting_games) + "
-"
-        "- Finished: " + str(finished_games) + "
-
-"
-        "Top Players:
-"
-    )
-
-    for i, p in enumerate(top_players, 1):
-        name = p.get("first_name") or p.get("username") or "Unknown"
-        text += str(i) + ". " + name + " - " + str(p['games_won']) + " wins / " + str(p['games_played']) + " games
-"
-
-    await update.message.reply_text(text)
-
-
-async def activegames_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
-        return
-
-    active = list(games_col.find(
-        {"status": {"$in": ["waiting", "playing"]}}
-    ).sort("created_at", -1))
-
-    if not active:
-        await update.message.reply_text("No active games right now.")
-        return
-
-    lines = ["Active Games: " + str(len(active)) + "
-"]
-    for g in active:
-        p2 = g.get("player2_name") or "Waiting..."
-        status_emoji = "WAITING" if g["status"] == "waiting" else "PLAYING"
-        lines.append(
-            "[" + status_emoji + "] " + g['game_id'] + " - " + g['player1_name'] + " vs " + p2
-        )
-
-    await update.message.reply_text("
-".join(lines))
-
-
-async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
-        return
-
-    count = users_col.count_documents({})
-    recent = list(users_col.find().sort("joined_at", -1).limit(15))
-
-    lines = ["Total Users: " + str(count) + "
-
-Recent Users:"]
-    for u in recent:
-        name = u.get("first_name") or u.get("username") or "Unknown"
-        lines.append(
-            "- " + str(u['user_id']) + " - " + name + " | Games: " + str(u['games_played']) + " Wins: " + str(u['games_won'])
-        )
-
-    await update.message.reply_text("
-".join(lines))
-
-
-async def getuser_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
-        return
-
-    if not context.args:
-        await update.message.reply_text("Usage: /getuser user_id")
-        return
-
     try:
-        user_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("Please provide a valid user ID.")
-        return
+        db_client = MongoClient(MONGO_URI)
+        db        = db_client["tictactoe"]
+        logging.info("MongoDB connected!")
+    except Exception as e:
+        logging.error(f"MongoDB failed: {e}")
 
-    user = users_col.find_one({"user_id": user_id})
-    if not user:
-        await update.message.reply_text("User not found.")
-        return
-
-    win_rate = round(user.get("games_won", 0) / max(user.get("games_played", 1), 1) * 100, 1)
-
-    text = (
-        "User Info
-
-"
-        "ID: " + str(user['user_id']) + "
-"
-        "Name: " + str(user.get('first_name', 'N/A')) + "
-"
-        "Username: @" + str(user.get('username') or 'N/A') + "
-"
-        "Games Played: " + str(user.get('games_played', 0)) + "
-"
-        "Wins: " + str(user.get('games_won', 0)) + "
-"
-        "Losses: " + str(user.get('games_lost', 0)) + "
-"
-        "Draws: " + str(user.get('games_drawn', 0)) + "
-"
-        "Win Rate: " + str(win_rate) + "%
-"
-        "Joined: " + str(user.get('joined_at', 'N/A')[:10]) + "
-"
-        "Last Active: " + str(user.get('last_active', 'N/A')[:16])
-    )
-    await update.message.reply_text(text)
-
-
-async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
-        return
-
-    if not context.args:
-        await update.message.reply_text("Usage: /broadcast Your message here")
-        return
-
-    message = " ".join(context.args)
-    users = list(users_col.find({}, {"user_id": 1}))
-
-    sent = 0
-    failed = 0
-    for u in users:
-        try:
-            await context.bot.send_message(u["user_id"], "Broadcast:
-
-" + message)
-            sent += 1
-            await asyncio.sleep(0.05)
-        except Exception:
-            failed += 1
-
-    await update.message.reply_text("Broadcast sent to " + str(sent) + " users. Failed: " + str(failed))
-
-
-async def ban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
-        return
-
-    if not context.args:
-        await update.message.reply_text("Usage: /ban user_id")
-        return
-
+def db_save_user(uid, name):
+    if db is None: return
     try:
-        user_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("Please provide a valid user ID.")
-        return
+        db.users.update_one({"_id": uid},
+            {"$set": {"name": name, "last_seen": datetime.now().isoformat()},
+             "$inc": {"games_played": 0},
+             "$setOnInsert": {"joined": datetime.now().isoformat()}},
+            upsert=True)
+    except Exception as e: logging.error(f"db_save_user: {e}")
 
-    banned_col.update_one(
-        {"user_id": user_id},
-        {"$set": {"user_id": user_id, "banned_at": datetime.now().isoformat()}},
-        upsert=True
-    )
+def db_save_game(game):
+    if db is None: return
+    try: db.games.update_one({"_id": game["id"]}, {"$set": game}, upsert=True)
+    except Exception as e: logging.error(f"db_save_game: {e}")
 
-    await update.message.reply_text("User " + str(user_id) + " has been banned.")
+def db_inc_games(uid):
+    if db is None: return
+    try: db.users.update_one({"_id": uid}, {"$inc": {"games_played": 1}})
+    except: pass
 
+def db_get_top_players(limit=5):
+    if db is None: return []
+    try: return list(db.users.find().sort("games_played", -1).limit(limit))
+    except: return []
 
-async def unban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
-        return
+def db_get_all_users():
+    if db is None: return []
+    try: return list(db.users.find())
+    except: return []
 
-    if not context.args:
-        await update.message.reply_text("Usage: /unban user_id")
-        return
+def db_get_user(uid):
+    if db is None: return None
+    try: return db.users.find_one({"_id": uid})
+    except: return None
 
+# ============================================================
+#                     IN-MEMORY (fallback)
+# ============================================================
+games    = {}
+users    = {}
+banned   = set()
+maintenance = False
+stats    = {"total_games": 0, "total_moves": 0}
+
+WIN_LINES = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
+
+# ============================================================
+#                     TELEGRAM HELPERS
+# ============================================================
+def api(method, **kwargs):
     try:
-        user_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("Please provide a valid user ID.")
+        r = requests.post(f"{BASE_URL}/{method}", json=kwargs, timeout=15)
+        return r.json()
+    except Exception as e: logging.error(f"API {method}: {e}"); return {}
+
+def send(chat_id, text, **kwargs):
+    return api("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML", **kwargs)
+
+def answer_inline(qid, results):
+    return api("answerInlineQuery", inline_query_id=qid, results=results, cache_time=0)
+
+def answer_cb(cbid, text="", alert=False):
+    return api("answerCallbackQuery", callback_query_id=cbid, text=text, show_alert=alert)
+
+# ============================================================
+#                     GAME LOGIC
+# ============================================================
+def check_winner(board):
+    for a,b,c in WIN_LINES:
+        if board[a] and board[a]==board[b]==board[c]: return board[a]
+    if all(board): return "draw"
+    return None
+
+def create_game(p1_id, p1_name):
+    gid        = str(uuid.uuid4())[:8]
+    c_sym      = random.choice(["X","O"])
+    o_sym      = "O" if c_sym=="X" else "X"
+    game = {
+        "id": gid, "board": [None]*9, "current": "X",
+        "players": {c_sym: {"id": p1_id, "name": p1_name}, o_sym: None},
+        "creator_id": p1_id, "creator_sym": c_sym,
+        "status": "waiting", "scores": {"X":0,"O":0},
+        "msg_id": None, "chat_id": None,
+        "created": datetime.now().isoformat()
+    }
+    games[gid] = game
+    stats["total_games"] += 1
+    db_save_game(game)
+    db_inc_games(p1_id)
+    return gid
+
+def web_url(gid, pid, sym):
+    g  = games.get(gid, {})
+    px = requests.utils.quote(g.get("players",{}).get("X",{}).get("name","Player X") or "Player X")
+    po = requests.utils.quote((g.get("players",{}).get("O") or {}).get("name","Waiting...") or "Waiting...")
+    return f"{APP_URL}?game_id={gid}&player_id={pid}&symbol={sym}&name_x={px}&name_o={po}&api={APP_URL}"
+
+def game_text(g):
+    px  = g["players"]["X"]["name"] if g["players"].get("X") else "—"
+    po  = g["players"]["O"]["name"] if g["players"].get("O") else "Waiting for opponent..."
+    res = check_winner(g["board"])
+    if g["status"]=="waiting":   st="⏳ Waiting for an opponent to join..."
+    elif res=="draw":             st="🤝 It's a draw! Well played by both."
+    elif res:                     st=f"🏆 <b>{g['players'][res]['name']}</b> wins the game!"
+    else:                         st=f"♟️ It's <b>{g['players'][g['current']]['name']}</b>'s turn."
+    return (f"🎮 <b>Tic Tac Toe</b>\n\n"
+            f"❌ <b>X:</b> {px}  —  Score: {g['scores']['X']}\n"
+            f"⭕ <b>O:</b> {po}  —  Score: {g['scores']['O']}\n\n{st}")
+
+# ============================================================
+#                     USER COMMANDS
+# ============================================================
+def cmd_start(msg):
+    uid  = msg["from"]["id"]
+    name = msg["from"].get("first_name","Player")
+    users[uid] = {"name": name, "joined": datetime.now().isoformat()}
+    db_save_user(uid, name)
+    send(msg["chat"]["id"],
+        f"👋 Welcome to <b>Tic Tac Toe</b>!\n\n"
+        f"Challenge your friends to a classic game of Tic Tac Toe — right inside Telegram.\n\n"
+        f"<b>How to play:</b>\n"
+        f"Type <code>@{BOT_USERNAME}</code> in any group or chat, "
+        f"then tap the game option to send an invitation.\n"
+        f"The first person to click <b>Join</b> becomes your opponent!",
+        reply_markup={"inline_keyboard":[[
+            {"text":"🎮 Play Now","switch_inline_query":"play"}
+        ]]})
+
+# ============================================================
+#                     OWNER COMMANDS
+# ============================================================
+def cmd_stats(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    active   = sum(1 for g in games.values() if g["status"]=="playing")
+    waiting  = sum(1 for g in games.values() if g["status"]=="waiting")
+    all_users = db_get_all_users() or list(users.values())
+    top      = db_get_top_players(5)
+    top_txt  = "\n".join(f"  {i+1}. {p.get('name','?')} — {p.get('games_played',0)} games"
+                         for i,p in enumerate(top)) or "  No data yet"
+    send(msg["chat"]["id"],
+        f"📊 <b>Bot Statistics</b>\n\n"
+        f"👥 Total Users: <b>{len(all_users)}</b>\n"
+        f"🎮 Total Games: <b>{stats['total_games']}</b>\n"
+        f"▶️ Active Games: <b>{active}</b>\n"
+        f"⏳ Waiting Games: <b>{waiting}</b>\n"
+        f"🚫 Banned: <b>{len(banned)}</b>\n"
+        f"🔧 Maintenance: <b>{'ON' if maintenance else 'OFF'}</b>\n\n"
+        f"🏆 <b>Top Players:</b>\n{top_txt}")
+
+def cmd_activegames(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    active = [g for g in games.values() if g["status"]=="playing"]
+    if not active: send(msg["chat"]["id"],"No active games right now."); return
+    lines = [f"▶️ <b>Active Games ({len(active)})</b>\n"]
+    for g in active[:15]:
+        px = g["players"].get("X",{}).get("name","?") if g["players"].get("X") else "?"
+        po = g["players"].get("O",{}).get("name","?") if g["players"].get("O") else "?"
+        lines.append(f"• <code>{g['id']}</code> — {px} vs {po}")
+    send(msg["chat"]["id"],"\n".join(lines))
+
+def cmd_users(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    all_u = db_get_all_users() or list(users.values())
+    if not all_u: send(msg["chat"]["id"],"No users yet."); return
+    lines = [f"👥 <b>All Users ({len(all_u)})</b>\n"]
+    for u in all_u[:20]:
+        uid  = u.get("_id") or u.get("id","?")
+        name = u.get("name","?")
+        gp   = u.get("games_played",0)
+        lines.append(f"• <code>{uid}</code> — {name} ({gp} games)")
+    if len(all_u)>20: lines.append(f"\n... and {len(all_u)-20} more.")
+    send(msg["chat"]["id"],"\n".join(lines))
+
+def cmd_getuser(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    p = msg.get("text","").split()
+    if len(p)<2: send(msg["chat"]["id"],"Usage: /getuser &lt;user_id&gt;"); return
+    try:
+        uid  = int(p[1])
+        info = db_get_user(uid) or users.get(uid)
+        if info:
+            send(msg["chat"]["id"],
+                f"👤 <b>User Info</b>\n\n"
+                f"ID: <code>{uid}</code>\n"
+                f"Name: <b>{info.get('name','?')}</b>\n"
+                f"Games: <b>{info.get('games_played',0)}</b>\n"
+                f"Joined: {info.get('joined','?')}\n"
+                f"Banned: {'Yes' if uid in banned else 'No'}")
+        else: send(msg["chat"]["id"],f"User <code>{uid}</code> not found.")
+    except: send(msg["chat"]["id"],"Invalid ID.")
+
+def cmd_broadcast(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    text = msg.get("text","").replace("/broadcast","").strip()
+    if not text: send(msg["chat"]["id"],"Usage: /broadcast &lt;message&gt;"); return
+    all_u = db_get_all_users() or []
+    uids  = [u.get("_id") for u in all_u] if all_u else list(users.keys())
+    count = 0
+    for uid in uids:
+        try: send(uid,f"📢 <b>Announcement</b>\n\n{text}"); count+=1; time.sleep(0.05)
+        except: pass
+    send(msg["chat"]["id"],f"✅ Broadcast sent to <b>{count}</b> users.")
+
+def cmd_ban(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    p=msg.get("text","").split()
+    if len(p)<2: send(msg["chat"]["id"],"Usage: /ban &lt;user_id&gt;"); return
+    try: uid=int(p[1]); banned.add(uid); send(msg["chat"]["id"],f"🚫 User <code>{uid}</code> banned.")
+    except: send(msg["chat"]["id"],"Invalid ID.")
+
+def cmd_unban(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    p=msg.get("text","").split()
+    if len(p)<2: send(msg["chat"]["id"],"Usage: /unban &lt;user_id&gt;"); return
+    try: uid=int(p[1]); banned.discard(uid); send(msg["chat"]["id"],f"✅ User <code>{uid}</code> unbanned.")
+    except: send(msg["chat"]["id"],"Invalid ID.")
+
+def cmd_maintenance(msg):
+    global maintenance
+    if msg["from"]["id"]!=OWNER_ID: return
+    maintenance=not maintenance
+    send(msg["chat"]["id"],f"🔧 Maintenance: <b>{'ON' if maintenance else 'OFF'}</b>")
+
+# ============================================================
+#                     INLINE QUERY
+# ============================================================
+def handle_inline(query):
+    uid  = query["from"]["id"]
+    name = query["from"].get("first_name","Player")
+    if uid in banned or (maintenance and uid!=OWNER_ID): return
+    gid  = create_game(uid, name)
+    users[uid] = {"name":name,"joined":datetime.now().isoformat()}
+    db_save_user(uid, name)
+    # Pre-generate URL for creator (X or O randomly assigned)
+    c_sym = games[gid]["creator_sym"]
+    creator_url = web_url(gid, uid, c_sym)
+    results=[{
+        "type":"article","id":gid,
+        "title":"Tic Tac Toe",
+        "description":"Challenge a friend to a game!",
+        "thumb_url":"https://telegra.ph/file/6165913f4f0bcdce9f5e0.jpg",
+        "thumb_width":512,"thumb_height":512,
+        "input_message_content":{
+            "message_text":
+                f"🎮 <b>{name}</b> has challenged you to a game of Tic Tac Toe!\n\n"
+                f"Click <b>Join Game</b> to play.",
+            "parse_mode":"HTML"},
+        "reply_markup":{"inline_keyboard":[[
+            {"text":"🎮 Join Game","callback_data":f"join:{gid}:{uid}"}
+        ]]}}]
+    answer_inline(query["id"], results)
+
+# ============================================================
+#                     CALLBACK QUERY
+# ============================================================
+def handle_callback(cb):
+    uid     = cb["from"]["id"]
+    name    = cb["from"].get("first_name","Player")
+    data    = cb.get("data","")
+    msg     = cb.get("message",{})
+    chat_id = msg.get("chat",{}).get("id")
+    msg_id  = msg.get("message_id")
+
+    # Handle play button — open web app for whoever clicks
+    if data.startswith("play:"):
+        gid  = data.split(":")[1]
+        game = games.get(gid)
+        if not game: answer_cb(cb["id"],"Game not found.",True); return
+        # Find this user's symbol
+        sym = None
+        for s,p in game["players"].items():
+            if p and str(p["id"])==str(uid): sym=s; break
+        if not sym: answer_cb(cb["id"],"You are not in this game.",True); return
+        url = web_url(gid, uid, sym)
+        api("answerCallbackQuery", callback_query_id=cb["id"], url=url)
         return
 
-    banned_col.delete_one({"user_id": user_id})
+    if not data.startswith("join:"): return
+    _,gid,creator_id = data.split(":")
+    game = games.get(gid)
 
-    await update.message.reply_text("User " + str(user_id) + " has been unbanned.")
+    if not game:          answer_cb(cb["id"],"Game not found.",True); return
+    if uid in banned:     answer_cb(cb["id"],"You are banned.",True); return
+    if str(uid)==creator_id: answer_cb(cb["id"],"You cannot join your own game!",True); return
+    if game["status"]!="waiting": answer_cb(cb["id"],"This game is already in progress.",True); return
 
+    # Assign joiner the remaining symbol
+    joiner_sym  = "O" if game["players"].get("X") else "X"
+    game["players"][joiner_sym] = {"id":uid,"name":name}
+    game["status"]  = "playing"
+    game["chat_id"] = chat_id
+    game["msg_id"]  = msg_id
+    users[uid] = {"name":name,"joined":datetime.now().isoformat()}
+    db_save_user(uid, name)
+    db_save_game(game)
 
-async def maintenance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_owner(update.effective_user.id):
-        await update.message.reply_text("Owner only command.")
+    creator_sym     = game.get("creator_sym","X")
+    creator_id_int  = game.get("creator_id", int(creator_id))
+    url_creator     = web_url(gid, creator_id_int, creator_sym)
+    url_joiner      = web_url(gid, uid, joiner_sym)
+
+    # Update group message with game status
+    api("editMessageText",
+        chat_id=chat_id, message_id=msg_id,
+        text=game_text(game), parse_mode="HTML",
+        reply_markup={"inline_keyboard":[[
+            {"text":"🎮 Open Game","callback_data":f"play:{gid}"}
+        ]]})
+
+    # Open game directly for joiner — no link, direct web app!
+    api("answerCallbackQuery",
+        callback_query_id=cb["id"],
+        url=url_joiner)
+
+# ============================================================
+#                     MESSAGE HANDLER
+# ============================================================
+def handle_message(msg):
+    uid  = msg["from"]["id"]
+    text = msg.get("text","")
+    if uid in banned: return
+    if maintenance and uid!=OWNER_ID:
+        send(msg["chat"]["id"],"🔧 The bot is currently under maintenance. Please try again later.")
         return
+    if   text=="/start":              cmd_start(msg)
+    elif text=="/stats":              cmd_stats(msg)
+    elif text=="/activegames":        cmd_activegames(msg)
+    elif text=="/users":              cmd_users(msg)
+    elif text.startswith("/getuser"): cmd_getuser(msg)
+    elif text.startswith("/broadcast"): cmd_broadcast(msg)
+    elif text.startswith("/ban"):     cmd_ban(msg)
+    elif text.startswith("/unban"):   cmd_unban(msg)
+    elif text=="/maintenance":        cmd_maintenance(msg)
 
-    context.bot_data["maintenance"] = not context.bot_data.get("maintenance", False)
-    status = "ON" if context.bot_data["maintenance"] else "OFF"
-    await update.message.reply_text("Maintenance mode: " + status)
+# ============================================================
+#                     REST API SERVER
+# ============================================================
+class Handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin","*")
+        self.send_header("Access-Control-Allow-Methods","GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers","Content-Type")
+        self.end_headers()
 
-
-# ════════════════════════════════════════════
-# INLINE QUERY & WEB APP HANDLERS
-# ════════════════════════════════════════════
-
-async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if is_banned(user.id):
-        await update.inline_query.answer([], cache_time=0)
-        return
-
-    ensure_user(user.id, user.username, user.first_name)
-
-    game_id = generate_game_id()
-    bot_username = (await context.bot.get_me()).username
-
-    webapp_url = APP_URL + "/?game=" + game_id + "&player1=" + str(user.id) + "&name1=" + (user.first_name or user.username or "Player X")
-
-    results = [
-        InlineQueryResultArticle(
-            id=game_id,
-            title="Tic Tac Toe",
-            description="Challenge by " + (user.first_name or "You") + " - Click to play!",
-            input_message_content=InputTextMessageContent(
-                message_text=(
-                    (user.first_name or "Someone") + " has challenged you to a game of Tic Tac Toe!
-
-"
-                    "Click the Join button below to accept the challenge and become their opponent."
-                )
-            ),
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Join Game", web_app=WebAppInfo(url=webapp_url))]
-            ]),
-            thumb_url="https://cdn-icons-png.flaticon.com/512/566/566294.png"
-        )
-    ]
-
-    games_col.insert_one({
-        "game_id": game_id,
-        "player1_id": user.id,
-        "player1_name": user.first_name or user.username or "Player X",
-        "player2_id": None,
-        "player2_name": None,
-        "status": "waiting",
-        "board": [["","",""],["","",""],["","",""]],
-        "current_turn": "X",
-        "winner": None,
-        "inline_message_id": None,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat()
-    })
-
-    await update.inline_query.answer(results, cache_time=0)
-
-
-async def chosen_inline_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    result = update.chosen_inline_result
-    if not result:
-        return
-
-    game_id = result.result_id
-    inline_msg_id = result.inline_message_id
-
-    games_col.update_one(
-        {"game_id": game_id},
-        {"$set": {"inline_message_id": inline_msg_id}}
-    )
-
-    logger.info("Game " + game_id + " sent with inline_message_id " + str(inline_msg_id))
-
-
-async def web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.web_app_data:
-        return
-
-    data = json.loads(update.message.web_app_data.data)
-    game_id = data.get("game_id")
-    action = data.get("action")
-
-    if action == "join":
-        player2_id = data.get("player2")
-        player2_name = data.get("name2", "Player O")
-
-        games_col.update_one(
-            {"game_id": game_id},
-            {"$set": {
-                "player2_id": player2_id,
-                "player2_name": player2_name,
-                "status": "playing",
-                "updated_at": datetime.now().isoformat()
-            }}
-        )
-        return
-
-    if action == "game_over":
-        winner = data.get("winner")
-        p1_moves = data.get("p1_moves", 0)
-        p2_moves = data.get("p2_moves", 0)
-
-        game = games_col.find_one({"game_id": game_id})
-        if not game:
-            return
-
-        games_col.update_one(
-            {"game_id": game_id},
-            {"$set": {
-                "status": "finished",
-                "winner": winner,
-                "updated_at": datetime.now().isoformat()
-            }}
-        )
-        stats_col.update_one({"_id": "total_games"}, {"$inc": {"value": 1}})
-
-        p1_id = game["player1_id"]
-        p2_id = game.get("player2_id")
-
-        if winner == "draw":
-            update_user_stats(p1_id, "draw", p1_moves)
-            if p2_id:
-                update_user_stats(p2_id, "draw", p2_moves)
-        elif winner == "X":
-            update_user_stats(p1_id, "win", p1_moves)
-            if p2_id:
-                update_user_stats(p2_id, "loss", p2_moves)
-        else:
-            update_user_stats(p1_id, "loss", p1_moves)
-            if p2_id:
-                update_user_stats(p2_id, "win", p2_moves)
-
-        inline_msg_id = game.get("inline_message_id")
-
-        if inline_msg_id:
-            p1_name = game["player1_name"]
-            p2_name = game.get("player2_name") or "Player O"
-
-            if winner == "draw":
-                text = "It's a draw! Well played by both players."
-            elif winner == "X":
-                text = p1_name + " wins the game! Better luck next time, " + p2_name + "."
-            else:
-                text = p2_name + " wins the game! Better luck next time, " + p1_name + "."
-
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        if parsed.path in ["/","index.html","/index.html"]:
             try:
-                await context.bot.edit_message_text(
-                    text,
-                    inline_message_id=inline_msg_id
-                )
-            except Exception as e:
-                logger.warning("Could not update inline message: " + str(e))
+                with open("index.html","rb") as f: content=f.read()
+                self.send_response(200)
+                self.send_header("Content-Type","text/html")
+                self.send_header("Access-Control-Allow-Origin","*")
+                self.end_headers(); self.wfile.write(content)
+            except: self.send_response(404); self.end_headers()
+        elif parsed.path=="/state":
+            gid  = params.get("game_id",[None])[0]
+            game = games.get(gid)
+            if game:
+                players_out = {}
+                for sym,p in game["players"].items():
+                    players_out[sym] = {"id": p["id"], "name": p["name"]} if p else None
+                self.json_res({"board":game["board"],"current":game["current"],
+                    "status":game["status"],"players":players_out})
+            else: self.json_res({"error":"not found"},404)
+        elif parsed.path=="/health":
+            self.json_res({"ok":True})
+        else: self.send_response(404); self.end_headers()
 
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length",0))
+        body   = self.rfile.read(length)
+        parsed = urlparse(self.path)
+        try: data=json.loads(body)
+        except: data={}
 
-# ════════════════════════════════════════════
-# MAIN
-# ════════════════════════════════════════════
+        if parsed.path=="/webhook":
+            try:
+                if "message"       in data: handle_message(data["message"])
+                elif "inline_query" in data: handle_inline(data["inline_query"])
+                elif "callback_query" in data: handle_callback(data["callback_query"])
+            except Exception as e: logging.error(f"Webhook: {e}")
+            self.json_res({"ok":True})
 
-async def post_init(app: Application):
+        elif parsed.path=="/move":
+            gid=data.get("game_id"); pid=data.get("player_id"); cell=data.get("cell")
+            game=games.get(gid)
+            if not game or game["status"]!="playing": self.json_res({"error":"invalid"},400); return
+            curr=game["players"][game["current"]]
+            if str(curr["id"])!=str(pid): self.json_res({"error":"not your turn"},403); return
+            if game["board"][cell] is not None: self.json_res({"error":"taken"},400); return
+            game["board"][cell]=game["current"]; stats["total_moves"]+=1
+            res=check_winner(game["board"])
+            if res:
+                game["status"]="finished"
+                db_save_game(game)
+                if game["chat_id"] and game["msg_id"]:
+                    api("editMessageText",chat_id=game["chat_id"],message_id=game["msg_id"],
+                        text=game_text(game),parse_mode="HTML")
+            else:
+                game["current"]="O" if game["current"]=="X" else "X"
+                db_save_game(game)
+            self.json_res({"ok":True,"board":game["board"],"current":game["current"]})
+
+        elif parsed.path=="/result":
+            gid=data.get("game_id"); scores=data.get("scores",{})
+            game=games.get(gid)
+            if game and scores:
+                game["scores"]=scores
+                db_save_game(game)
+            self.json_res({"ok":True})
+        else: self.send_response(404); self.end_headers()
+
+    def json_res(self, data, status=200):
+        body=json.dumps(data).encode()
+        self.send_response(status)
+        self.send_header("Content-Type","application/json")
+        self.send_header("Access-Control-Allow-Origin","*")
+        self.end_headers(); self.wfile.write(body)
+
+    def log_message(self,*a): pass
+
+# ============================================================
+#                     POLLING
+# ============================================================
+last_uid=0
+def poll():
+    global last_uid, BOT_USERNAME
+    me=api("getMe")
+    if me.get("ok"): BOT_USERNAME=me["result"].get("username","TicTacToeBot"); logging.info(f"Bot: @{BOT_USERNAME}")
+    while True:
+        try:
+            r=requests.get(f"{BASE_URL}/getUpdates",params={"offset":last_uid+1,"timeout":30},timeout=40)
+            r.raise_for_status()
+            for upd in r.json().get("result",[]):
+                last_uid=upd["update_id"]
+                if "message"       in upd: handle_message(upd["message"])
+                if "inline_query"  in upd: handle_inline(upd["inline_query"])
+                if "callback_query" in upd: handle_callback(upd["callback_query"])
+        except Exception as e: logging.error(f"Poll: {e}"); time.sleep(5)
+
+# ============================================================
+#                     MAIN
+# ============================================================
+if __name__=="__main__":
+    logging.basicConfig(level=logging.INFO,
+        format="%(asctime)s — %(levelname)s — %(message)s",
+        handlers=[logging.StreamHandler()])
+    logging.info("🎮 Tic Tac Toe Bot Starting...")
     init_db()
-    app.bot_data["maintenance"] = False
-    logger.info("Bot initialized with MongoDB.")
-
-
-def main():
-    if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN environment variable is required!")
-    if not MONGODB_URI:
-        raise ValueError("MONGODB_URI environment variable is required!")
-
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    logger.info("Flask server started on background thread.")
-
-    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
-
-    # Normal user commands
-    app.add_handler(CommandHandler("start", start))
-
-    # Owner commands
-    app.add_handler(CommandHandler("stats", stats_cmd))
-    app.add_handler(CommandHandler("activegames", activegames_cmd))
-    app.add_handler(CommandHandler("users", users_cmd))
-    app.add_handler(CommandHandler("getuser", getuser_cmd))
-    app.add_handler(CommandHandler("broadcast", broadcast_cmd))
-    app.add_handler(CommandHandler("ban", ban_cmd))
-    app.add_handler(CommandHandler("unban", unban_cmd))
-    app.add_handler(CommandHandler("maintenance", maintenance_cmd))
-
-    # Inline & Web App
-    app.add_handler(InlineQueryHandler(inline_query))
-    app.add_handler(ChosenInlineResultHandler(chosen_inline_result))
-    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data))
-
-    logger.info("Starting bot polling...")
-    app.run_polling(drop_pending_updates=True)
-
-
-if __name__ == "__main__":
-    main()
+    port=int(os.environ.get("PORT",8080))
+    server=HTTPServer(("0.0.0.0",port),Handler)
+    logging.info(f"Server on port {port}")
+    threading.Thread(target=poll,daemon=True).start()
+    server.serve_forever()
