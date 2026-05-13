@@ -296,18 +296,13 @@ def handle_callback(cb):
     chat_id = msg.get("chat",{}).get("id")
     msg_id  = msg.get("message_id")
 
-    # Handle play button — open web app for whoever clicks
+    # Handle play button — open game for whoever clicks
     if data.startswith("play:"):
         gid  = data.split(":")[1]
         game = games.get(gid)
         if not game: answer_cb(cb["id"],"Game not found.",True); return
-        # Find this user's symbol
-        sym = None
-        for s,p in game["players"].items():
-            if p and str(p["id"])==str(uid): sym=s; break
-        if not sym: answer_cb(cb["id"],"You are not in this game.",True); return
-        url = web_url(gid, uid, sym)
-        api("answerCallbackQuery", callback_query_id=cb["id"], url=url)
+        game_url = f"{APP_URL}/game/{gid}?pid={uid}"
+        api("answerCallbackQuery", callback_query_id=cb["id"], url=game_url)
         return
 
     if not data.startswith("join:"): return
@@ -334,7 +329,11 @@ def handle_callback(cb):
     url_creator     = web_url(gid, creator_id_int, creator_sym)
     url_joiner      = web_url(gid, uid, joiner_sym)
 
-    # Update group message with game status
+    # Game URLs via /game/ endpoint
+    game_url_creator = f"{APP_URL}/game/{gid}?pid={creator_id_int}"
+    game_url_joiner  = f"{APP_URL}/game/{gid}?pid={uid}"
+
+    # Update group message
     api("editMessageText",
         chat_id=chat_id, message_id=msg_id,
         text=game_text(game), parse_mode="HTML",
@@ -342,10 +341,10 @@ def handle_callback(cb):
             {"text":"🎮 Open Game","callback_data":f"play:{gid}"}
         ]]})
 
-    # Open game directly for joiner — no link, direct web app!
+    # Open game directly for joiner!
     api("answerCallbackQuery",
         callback_query_id=cb["id"],
-        url=url_joiner)
+        url=game_url_joiner)
 
 # ============================================================
 #                     MESSAGE HANDLER
@@ -401,6 +400,43 @@ class Handler(BaseHTTPRequestHandler):
             else: self.json_res({"error":"not found"},404)
         elif parsed.path=="/health":
             self.json_res({"ok":True})
+        elif parsed.path.startswith("/game/"):
+            gid  = parsed.path.split("/game/")[1]
+            game = games.get(gid)
+            if not game: self.send_response(404); self.end_headers(); return
+            # Serve index.html with game params embedded
+            try:
+                with open("index.html","rb") as f: html=f.read().decode()
+                # Get player info from Telegram initData (passed as query param)
+                pid = params.get("pid",[None])[0]
+                sym = None
+                if pid:
+                    for s,p in game["players"].items():
+                        if p and str(p["id"])==str(pid): sym=s; break
+                if not sym:
+                    # Default — serve waiting page
+                    sym = game.get("creator_sym","X")
+                    pid = str(game.get("creator_id",""))
+                nx = requests.utils.quote(game["players"].get("X",{}).get("name","Player X") or "Player X")
+                no = requests.utils.quote((game["players"].get("O") or {}).get("name","Waiting...") or "Waiting...")
+                # Inject params into HTML
+                inject = f"""<script>
+window._GAME_ID="{gid}";
+window._PLAYER_ID="{pid}";
+window._SYMBOL="{sym}";
+window._NAME_X=decodeURIComponent("{nx}");
+window._NAME_O=decodeURIComponent("{no}");
+window._API_URL="{APP_URL}";
+</script>"""
+                html = html.replace("</head>", inject+"</head>", 1)
+                self.send_response(200)
+                self.send_header("Content-Type","text/html")
+                self.send_header("Access-Control-Allow-Origin","*")
+                self.end_headers()
+                self.wfile.write(html.encode())
+            except Exception as e:
+                logging.error(f"Game serve error: {e}")
+                self.send_response(500); self.end_headers()
         else: self.send_response(404); self.end_headers()
 
     def do_POST(self):
