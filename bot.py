@@ -504,31 +504,20 @@ window._API_URL="{APP_URL}";
 # ============================================================
 #                     POLLING
 # ============================================================
-last_uid=0
-def poll():
-    global last_uid, BOT_USERNAME
-    me=api("getMe")
-    if me.get("ok"): BOT_USERNAME=me["result"].get("username","TicTacToeBot"); logging.info(f"Bot: @{BOT_USERNAME}")
-    while True:
-        try:
-            r=requests.get(f"{BASE_URL}/getUpdates",params={"offset":last_uid+1,"timeout":30},timeout=40)
-            if r.status_code == 409:
-                logging.warning("409 Conflict — another instance running, waiting 15s...")
-                time.sleep(15)
-                continue
-            if r.status_code != 200:
-                time.sleep(5)
-                continue
-            data = r.json()
-            if not data or not isinstance(data, dict):
-                time.sleep(5)
-                continue
-            for upd in data.get("result",[]):
-                last_uid=upd["update_id"]
-                if "message"       in upd: handle_message(upd["message"])
-                if "inline_query"  in upd: handle_inline(upd["inline_query"])
-                if "callback_query" in upd: handle_callback(upd["callback_query"])
-        except Exception as e: logging.error(f"Poll: {e}"); time.sleep(5)
+def set_webhook():
+    global BOT_USERNAME
+    # Get bot info
+    me = api("getMe")
+    if me.get("ok"):
+        BOT_USERNAME = me["result"].get("username","TicTacToeBot")
+        logging.info(f"Bot: @{BOT_USERNAME}")
+    # Set webhook
+    webhook_url = f"{APP_URL}/webhook"
+    r = api("setWebhook", url=webhook_url, allowed_updates=["message","inline_query","callback_query"])
+    if r.get("ok"):
+        logging.info(f"Webhook set: {webhook_url}")
+    else:
+        logging.error(f"Webhook failed: {r}")
 
 # ============================================================
 #                     MAIN
@@ -542,5 +531,5 @@ if __name__=="__main__":
     port=int(os.environ.get("PORT",8080))
     server=HTTPServer(("0.0.0.0",port),Handler)
     logging.info(f"Server on port {port}")
-    threading.Thread(target=poll,daemon=True).start()
+    set_webhook()
     server.serve_forever()
