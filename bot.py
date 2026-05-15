@@ -281,7 +281,8 @@ def handle_inline(query):
                 f"Click <b>Join Game</b> to play.",
             "parse_mode":"HTML"},
         "reply_markup":{"inline_keyboard":[[
-            {"text":"🎮 Join Game","callback_data":f"join:{gid}:{uid}"}
+            {"text":"🎮 Join Game","callback_data":f"join:{gid}:{uid}"},
+            {"text":"▶️ Play","callback_data":f"play:{gid}:{uid}"}
         ]]}}]
     answer_inline(query["id"], results)
 
@@ -296,10 +297,11 @@ def handle_callback(cb):
     chat_id = msg.get("chat",{}).get("id")
     msg_id  = msg.get("message_id")
 
-    # Handle play button — open game for whoever clicks
+    # Handle play button — creator opens their own game
     if data.startswith("play:"):
-        gid  = data.split(":")[1]
-        game = games.get(gid)
+        parts = data.split(":")
+        gid   = parts[1]
+        game  = games.get(gid)
         if not game: answer_cb(cb["id"],"Game not found.",True); return
         game_url = f"{APP_URL}/game/{gid}?pid={uid}"
         api("answerCallbackQuery", callback_query_id=cb["id"], url=game_url)
