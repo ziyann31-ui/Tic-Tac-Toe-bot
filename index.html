@@ -324,8 +324,16 @@ function showResult(emoji,text,sub,type){
   document.getElementById('status').className=`status ${type}`;
 }
 
-function newRound(){
-  state.board=Array(9).fill(null);state.gameOver=false;state.current='X';
+async function newRound(){
+  // Reset server state first
+  if(apiUrl && gameId){
+    try{
+      await fetch(`${apiUrl}/newround?game_id=${gameId}`);
+    } catch(e){ console.error(e); }
+  }
+  state.board=Array(9).fill(null);
+  state.gameOver=false;
+  state.current='X';
   document.getElementById('resultOverlay').classList.remove('show');
   document.getElementById('newRoundBtn').style.display='none';
   document.querySelectorAll('.cell').forEach(c=>{c.className='cell';c.textContent='';});
