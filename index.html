@@ -361,23 +361,31 @@ function pollWaiting(){
       const r=await fetch(`${apiUrl}/state?game_id=${gameId}&pid=${playerId}`);
       const data=await r.json();
       // Get my symbol from server
-      if(data.my_symbol) symbol = data.my_symbol;
-      state.mySymbol = symbol;
+      if(data.my_symbol){ symbol=data.my_symbol; state.mySymbol=symbol; }
+      // Update waiting screen names
+      if(data.players){
+        const xName = data.players.X?.name || 'Player X';
+        const oName = data.players.O?.name || 'Waiting...';
+        document.getElementById('wnameX').textContent = xName;
+        document.getElementById('wnameO').textContent = oName;
+        state.names.X = xName;
+        state.names.O = oName;
+      }
       if(data.status==='expired'){
         document.querySelector('.wait-sub').textContent='Game expired. No one joined.';
         document.querySelector('.spinner-row').style.display='none';
         return;
       }
-      if(data.status==='playing'){
-        // Get player names from server
-        if(data.players){
-          state.names.X = data.players.X?.name || 'Player X';
-          state.names.O = data.players.O?.name || 'Player O';
-        }
+      if(data.status==='playing' && data.players && data.players.X && data.players.O){
         startGame();
-      } else { pollWaiting(); }
-    } catch{ pollWaiting(); }
-  },2000);
+      } else { 
+        pollWaiting(); 
+      }
+    } catch(e){ 
+      console.error(e);
+      pollWaiting(); 
+    }
+  },1500);
 }
 
 // Poll for opponent's move
