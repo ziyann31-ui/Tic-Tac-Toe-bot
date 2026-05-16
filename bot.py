@@ -39,9 +39,42 @@ def db_save_user(uid, name):
         db.users.update_one({"_id": uid},
             {"$set": {"name": name, "last_seen": datetime.now().isoformat()},
              "$inc": {"games_played": 0},
-             "$setOnInsert": {"joined": datetime.now().isoformat()}},
+             "$setOnInsert": {"joined": datetime.now().isoformat(), "weekly_wins": 0, "total_wins": 0}},
             upsert=True)
     except Exception as e: logging.error(f"db_save_user: {e}")
+
+def db_add_win(uid, name):
+    if db is None:
+        # In-memory fallback
+        if uid not in users: users[uid] = {"name": name, "weekly_wins": 0, "total_wins": 0}
+        users[uid]["weekly_wins"] = users[uid].get("weekly_wins", 0) + 1
+        users[uid]["total_wins"]  = users[uid].get("total_wins", 0) + 1
+        return
+    try:
+        db.users.update_one({"_id": uid},
+            {"$inc": {"weekly_wins": 1, "total_wins": 1},
+             "$set":  {"name": name}},
+            upsert=True)
+    except Exception as e: logging.error(f"db_add_win: {e}")
+
+def db_get_weekly_top(limit=5):
+    if db is None:
+        top = sorted(users.values(), key=lambda u: u.get("weekly_wins",0), reverse=True)
+        return top[:limit]
+    try: return list(db.users.find({"weekly_wins":{"$gt":0}}).sort("weekly_wins",-1).limit(limit))
+    except: return []
+
+def db_reset_weekly():
+    if db is None:
+        for u in users.values(): u["weekly_wins"] = 0
+        return
+    try: db.users.update_many({}, {"$set": {"weekly_wins": 0}})
+    except Exception as e: logging.error(f"db_reset_weekly: {e}")
+
+def db_get_groups():
+    if db is None: return []
+    try: return list(db.groups.find())
+    except: return []
 
 def db_save_game(game):
     if db is None: return
@@ -256,6 +289,52 @@ def cmd_maintenance(msg):
     maintenance=not maintenance
     send(msg["chat"]["id"],f"🔧 Maintenance: <b>{'ON' if maintenance else 'OFF'}</b>")
 
+def build_leaderboard_text():
+    top = db_get_weekly_top(5)
+    if not top:
+        return "🏆 <b>Weekly Leaderboard</b>
+
+No games played this week yet!"
+    medals = ["👑","🥈","🥉","4️⃣","5️⃣"]
+    lines  = ["🏆 <b>Weekly Leaderboard</b>
+"]
+    for i,p in enumerate(top):
+        name = p.get("name","?")
+        wins = p.get("weekly_wins",0)
+        lines.append(f"{medals[i]} <b>{name}</b> — {wins} win{'s' if wins!=1 else ''}")
+    lines.append(f"
+🔄 Resets every Sunday midnight")
+    return "
+".join(lines)
+
+def cmd_leaderboard(msg):
+    send(msg["chat"]["id"], build_leaderboard_text())
+
+def cmd_resetleaderboard(msg):
+    if msg["from"]["id"]!=OWNER_ID: return
+    db_reset_weekly()
+    send(msg["chat"]["id"],"✅ Weekly leaderboard reset!")
+
+def broadcast_leaderboard():
+    text = build_leaderboard_text()
+    # Send to all groups
+    groups = db_get_groups()
+    count  = 0
+    for g in groups:
+        try:
+            api("sendMessage", chat_id=g["_id"], text=text, parse_mode="HTML")
+            count += 1
+            time.sleep(0.1)
+        except: pass
+    # Send to all users too
+    all_u = db_get_all_users() or []
+    for u in all_u:
+        try:
+            api("sendMessage", chat_id=u.get("_id"), text=text, parse_mode="HTML")
+            time.sleep(0.05)
+        except: pass
+    logging.info(f"Leaderboard sent to {count} groups")
+
 # ============================================================
 #                     INLINE QUERY
 # ============================================================
@@ -366,6 +445,7 @@ def handle_message(msg):
         send(msg["chat"]["id"],"🔧 The bot is currently under maintenance. Please try again later.")
         return
     if   text=="/start":              cmd_start(msg)
+    elif text=="/leaderboard":        cmd_leaderboard(msg)
     elif text=="/stats":              cmd_stats(msg)
     elif text=="/activegames":        cmd_activegames(msg)
     elif text=="/users":              cmd_users(msg)
@@ -374,6 +454,7 @@ def handle_message(msg):
     elif text.startswith("/ban"):     cmd_ban(msg)
     elif text.startswith("/unban"):   cmd_unban(msg)
     elif text=="/maintenance":        cmd_maintenance(msg)
+    elif text=="/resetleaderboard":   cmd_resetleaderboard(msg)
 
 # ============================================================
 #                     REST API SERVER
@@ -417,6 +498,15 @@ class Handler(BaseHTTPRequestHandler):
             else: self.json_res({"error":"not found"},404)
         elif parsed.path=="/health":
             self.json_res({"ok":True})
+        elif parsed.path=="/newround":
+            gid  = params.get("game_id",[None])[0]
+            game = games.get(gid)
+            if not game: self.json_res({"error":"not found"},404); return
+            game["board"]   = [None]*9
+            game["current"] = "X"
+            game["status"]  = "playing"
+            db_save_game(game)
+            self.json_res({"ok":True,"board":game["board"],"current":game["current"]})
         elif parsed.path=="/join":
             gid  = params.get("game_id",[None])[0]
             pid  = params.get("pid",[None])[0]
@@ -514,11 +604,17 @@ window._API_URL="{APP_URL}";
             self.json_res({"ok":True,"board":game["board"],"current":game["current"]})
 
         elif parsed.path=="/result":
-            gid=data.get("game_id"); scores=data.get("scores",{})
-            game=games.get(gid)
+            gid    = data.get("game_id")
+            scores = data.get("scores",{})
+            winner = data.get("winner")
+            game   = games.get(gid)
             if game and scores:
-                game["scores"]=scores
+                game["scores"] = scores
                 db_save_game(game)
+                # Track winner
+                if winner and winner in game["players"] and game["players"][winner]:
+                    w = game["players"][winner]
+                    db_add_win(w["id"], w["name"])
             self.json_res({"ok":True})
         else: self.send_response(404); self.end_headers()
 
