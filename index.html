@@ -193,14 +193,31 @@
 const tg = window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();}
 
-// Use server-injected globals if available, fallback to URL params
-const params   = new URLSearchParams(window.location.search);
-const gameId   = window._GAME_ID   || params.get('game_id');
-const playerId = window._PLAYER_ID || params.get('player_id');
-const symbol   = window._SYMBOL    || params.get('symbol')||'X';
-const nameX    = window._NAME_X    || decodeURIComponent(params.get('name_x')||'Player X');
-const nameO    = window._NAME_O    || decodeURIComponent(params.get('name_o')||'Waiting...');
-const apiUrl   = window._API_URL   || params.get('api')||'';
+// Read startapp parameter from Telegram Mini App
+const tgStartParam = tg?.initDataUnsafe?.start_param || '';
+let gameId, playerId, symbol, nameX, nameO, apiUrl;
+
+// Parse startapp format: GAME_ID_CREATOR_ID
+if(tgStartParam && tgStartParam.includes('_')){
+  const parts    = tgStartParam.split('_');
+  gameId         = parts[0];
+  const creatorId = parts[1];
+  // Current user from Telegram
+  playerId = String(tg?.initDataUnsafe?.user?.id || '0');
+  apiUrl   = window._API_URL || 'https://web-production-a0396.up.railway.app';
+  nameX    = 'Player X';
+  nameO    = 'Waiting...';
+  symbol   = 'X'; // Will be updated from server
+} else {
+  // Fallback to URL params or injected globals
+  const params = new URLSearchParams(window.location.search);
+  gameId   = window._GAME_ID   || params.get('game_id');
+  playerId = window._PLAYER_ID || params.get('player_id') || String(tg?.initDataUnsafe?.user?.id||'0');
+  symbol   = window._SYMBOL    || params.get('symbol')||'X';
+  nameX    = window._NAME_X    || decodeURIComponent(params.get('name_x')||'Player X');
+  nameO    = window._NAME_O    || decodeURIComponent(params.get('name_o')||'Waiting...');
+  apiUrl   = window._API_URL   || params.get('api')||'https://web-production-a0396.up.railway.app';
+}
 
 const WIN_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
@@ -213,13 +230,36 @@ let state={
 document.getElementById('wnameX').textContent = nameX;
 document.getElementById('wnameO').textContent = nameO;
 
-// If both players present — go to game directly
-if(nameO !== 'Waiting...'){
-  startGame();
-} else {
-  // Poll for opponent
-  pollWaiting();
+// Auto join via /join endpoint
+async function initGame(){
+  if(!gameId || !playerId || playerId==='0'){
+    pollWaiting(); return;
+  }
+  try{
+    const userName = encodeURIComponent(tg?.initDataUnsafe?.user?.first_name || 'Player');
+    const r = await fetch(`${apiUrl}/join?game_id=${gameId}&pid=${playerId}&name=${userName}`);
+    const data = await r.json();
+    if(data.ok){
+      symbol = data.symbol;
+      state.mySymbol = symbol;
+      if(data.status==='playing'){
+        // Get full state
+        const sr = await fetch(`${apiUrl}/state?game_id=${gameId}&pid=${playerId}`);
+        const sd = await sr.json();
+        if(sd.players){
+          state.names.X = sd.players.X?.name || 'Player X';
+          state.names.O = sd.players.O?.name || 'Player O';
+        }
+        startGame();
+      } else {
+        // Waiting for opponent
+        pollWaiting();
+      }
+    } else { pollWaiting(); }
+  } catch(e){ console.error(e); pollWaiting(); }
 }
+
+initGame();
 
 function startGame(){
   document.getElementById('waitingScreen').style.display='none';
@@ -318,13 +358,22 @@ function pollWaiting(){
   clearTimeout(waitPollTimer);
   waitPollTimer=setTimeout(async()=>{
     try{
-      const r=await fetch(`${apiUrl}/state?game_id=${gameId}`);
+      const r=await fetch(`${apiUrl}/state?game_id=${gameId}&pid=${playerId}`);
       const data=await r.json();
+      // Get my symbol from server
+      if(data.my_symbol) symbol = data.my_symbol;
+      state.mySymbol = symbol;
+      if(data.status==='expired'){
+        document.querySelector('.wait-sub').textContent='Game expired. No one joined.';
+        document.querySelector('.spinner-row').style.display='none';
+        return;
+      }
       if(data.status==='playing'){
-        // Opponent joined! Update name and start game
-        const oName = data.players?.[symbol==='X'?'O':'X']?.name||'Opponent';
-        if(symbol==='X') state.names.O=oName;
-        else state.names.X=oName;
+        // Get player names from server
+        if(data.players){
+          state.names.X = data.players.X?.name || 'Player X';
+          state.names.O = data.players.O?.name || 'Player O';
+        }
         startGame();
       } else { pollWaiting(); }
     } catch{ pollWaiting(); }
