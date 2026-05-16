@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, time, uuid, logging, requests, threading, json, random
+import os, time, threading, uuid, logging, requests, threading, json, random
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -266,9 +266,10 @@ def handle_inline(query):
     gid  = create_game(uid, name)
     users[uid] = {"name":name,"joined":datetime.now().isoformat()}
     db_save_user(uid, name)
-    # Pre-generate URL for creator (X or O randomly assigned)
-    c_sym = games[gid]["creator_sym"]
-    creator_url = web_url(gid, uid, c_sym)
+
+    # Mini App link with startapp=GAME_ID:CREATOR_ID
+    mini_app_url = f"https://t.me/XO_VerseBot/XOverse?startapp={gid}_{uid}"
+
     results=[{
         "type":"article","id":gid,
         "title":"Tic Tac Toe",
@@ -278,11 +279,10 @@ def handle_inline(query):
         "input_message_content":{
             "message_text":
                 f"🎮 <b>{name}</b> has challenged you to a game of Tic Tac Toe!\n\n"
-                f"Click <b>Join Game</b> to play.",
+                f"Tap <b>Join Game</b> to play.",
             "parse_mode":"HTML"},
         "reply_markup":{"inline_keyboard":[[
-            {"text":"🎮 Join Game","callback_data":f"join:{gid}:{uid}"},
-            {"text":"▶️ Play","callback_data":f"play:{gid}:{uid}"}
+            {"text":"🎮 Join Game", "url": mini_app_url}
         ]]}}]
     answer_inline(query["id"], results)
 
@@ -399,16 +399,46 @@ class Handler(BaseHTTPRequestHandler):
             except: self.send_response(404); self.end_headers()
         elif parsed.path=="/state":
             gid  = params.get("game_id",[None])[0]
+            pid  = params.get("pid",[None])[0]
             game = games.get(gid)
             if game:
                 players_out = {}
+                my_symbol   = None
                 for sym,p in game["players"].items():
                     players_out[sym] = {"id": p["id"], "name": p["name"]} if p else None
+                    if p and str(p["id"])==str(pid): my_symbol=sym
+                # If player not in game yet → they are joiner
+                if not my_symbol and game["status"]=="waiting":
+                    # Assign them the empty slot
+                    for sym,p in game["players"].items():
+                        if p is None: my_symbol=sym; break
                 self.json_res({"board":game["board"],"current":game["current"],
-                    "status":game["status"],"players":players_out})
+                    "status":game["status"],"players":players_out,"my_symbol":my_symbol})
             else: self.json_res({"error":"not found"},404)
         elif parsed.path=="/health":
             self.json_res({"ok":True})
+        elif parsed.path=="/join":
+            gid  = params.get("game_id",[None])[0]
+            pid  = params.get("pid",[None])[0]
+            name = params.get("name",["Player"])[0]
+            game = games.get(gid)
+            if not game: self.json_res({"error":"not found"},404); return
+            if game["status"]!="waiting": 
+                # Already joined — return their symbol
+                for sym,p in game["players"].items():
+                    if p and str(p["id"])==str(pid):
+                        self.json_res({"ok":True,"symbol":sym,"status":game["status"]}); return
+                self.json_res({"error":"game in progress"},400); return
+            # Check if already creator
+            creator_sym = game.get("creator_sym","X")
+            if str(pid)==str(game.get("creator_id")):
+                self.json_res({"ok":True,"symbol":creator_sym,"status":game["status"]}); return
+            # Join as second player
+            joiner_sym = "O" if game["players"].get("X") else "X"
+            game["players"][joiner_sym] = {"id":int(pid),"name":requests.utils.unquote(name)}
+            game["status"] = "playing"
+            db_save_game(game)
+            self.json_res({"ok":True,"symbol":joiner_sym,"status":"playing"})
         elif parsed.path.startswith("/game/"):
             gid  = parsed.path.split("/game/")[1]
             game = games.get(gid)
