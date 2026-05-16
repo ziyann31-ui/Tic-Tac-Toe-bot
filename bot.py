@@ -292,20 +292,15 @@ def cmd_maintenance(msg):
 def build_leaderboard_text():
     top = db_get_weekly_top(5)
     if not top:
-        return "🏆 <b>Weekly Leaderboard</b>
-
-No games played this week yet!"
-    medals = ["👑","🥈","🥉","4️⃣","5️⃣"]
-    lines  = ["🏆 <b>Weekly Leaderboard</b>
-"]
+        return "\U0001f3c6 <b>Weekly Leaderboard</b>\n\nNo games played this week yet!"
+    medals = ["\U0001f451","\U0001f948","\U0001f949","4.","5."]
+    lines  = ["\U0001f3c6 <b>Weekly Leaderboard</b>\n"]
     for i,p in enumerate(top):
         name = p.get("name","?")
         wins = p.get("weekly_wins",0)
         lines.append(f"{medals[i]} <b>{name}</b> — {wins} win{'s' if wins!=1 else ''}")
-    lines.append(f"
-🔄 Resets every Sunday midnight")
-    return "
-".join(lines)
+    lines.append("\U0001f504 Resets every Sunday midnight")
+    return "\n".join(lines)
 
 def cmd_leaderboard(msg):
     send(msg["chat"]["id"], build_leaderboard_text())
