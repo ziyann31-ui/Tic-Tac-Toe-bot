@@ -7,103 +7,81 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');
-  :root {
-    --bg:#0a0a0f;--surface:#13131a;--border:#1e1e2e;
-    --accent:#7c3aed;--accent2:#06b6d4;
-    --x:#f472b6;--o:#34d399;--text:#e2e8f0;--muted:#64748b;
-  }
+  :root{--bg:#0a0a0f;--surface:#13131a;--border:#1e1e2e;--accent:#7c3aed;--accent2:#06b6d4;--x:#f472b6;--o:#34d399;--text:#e2e8f0;--muted:#64748b;}
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;
-    min-height:100vh;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;padding:20px;overflow:hidden;}
-  body::before{content:'';position:fixed;inset:0;
-    background-image:linear-gradient(rgba(124,58,237,.03) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(124,58,237,.03) 1px,transparent 1px);
-    background-size:40px 40px;pointer-events:none;}
+  body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(124,58,237,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(124,58,237,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;}
 
   /* WAITING SCREEN */
-  .waiting-screen{width:100%;max-width:340px;display:flex;flex-direction:column;
-    align-items:center;gap:24px;text-align:center;animation:fadeUp .5s ease;}
+  .waiting-screen{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;animation:fadeUp .5s ease;}
   .wait-icon{font-size:64px;animation:float 3s ease-in-out infinite;}
-  .wait-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;
-    background:linear-gradient(135deg,var(--accent),var(--accent2));
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .wait-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
   .wait-sub{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
-  .wait-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
-    padding:20px;width:100%;}
+  .wait-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;width:100%;}
   .wait-card-title{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;}
   .wait-player{display:flex;align-items:center;gap:12px;padding:10px 0;}
   .wait-player+.wait-player{border-top:1px solid var(--border);}
-  .wait-sym{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;
-    justify-content:center;font-family:'Syne',sans-serif;font-size:18px;font-weight:800;}
+  .wait-sym{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:18px;font-weight:800;}
   .wait-sym.x{background:rgba(244,114,182,.1);color:var(--x);}
   .wait-sym.o{background:rgba(52,211,153,.1);color:var(--o);}
   .wait-name{font-size:13px;font-weight:700;}
   .wait-name.muted{color:var(--muted);}
-  .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);
-    margin-left:auto;animation:pulse 1.5s ease-in-out infinite;}
-  .spinner-row{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;
-    letter-spacing:1px;text-transform:uppercase;}
-  .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);
-    border-radius:50%;animation:spin .8s linear infinite;}
+  .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);margin-left:auto;animation:pulse 1.5s ease-in-out infinite;}
+  .spinner-row{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;letter-spacing:1px;text-transform:uppercase;}
+  .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
 
   /* GAME SCREEN */
-  .game-screen{width:100%;max-width:360px;display:flex;flex-direction:column;
-    align-items:center;gap:20px;}
+  .game-screen{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:16px;}
   .header{text-align:center;animation:fadeDown .5s ease;}
-  .title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;
-    background:linear-gradient(135deg,var(--accent),var(--accent2));
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-  .subtitle{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}
+  .title{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .round-info{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}
+
+  .rounds-bar{display:flex;gap:8px;align-items:center;animation:fadeUp .5s ease .05s both;}
+  .round-dot{width:10px;height:10px;border-radius:50%;border:1px solid var(--border);transition:all .3s;}
+  .round-dot.x{background:var(--x);border-color:var(--x);box-shadow:0 0 8px var(--x);}
+  .round-dot.o{background:var(--o);border-color:var(--o);box-shadow:0 0 8px var(--o);}
+  .round-dot.draw{background:var(--muted);border-color:var(--muted);}
+  .round-sep{font-size:10px;color:var(--muted);}
+
   .players{display:flex;align-items:center;gap:12px;width:100%;animation:fadeUp .5s ease .1s both;}
-  .player{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;
-    padding:12px;text-align:center;transition:all .3s;position:relative;overflow:hidden;}
+  .player{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;transition:all .3s;position:relative;overflow:hidden;}
   .player.active{border-color:var(--accent);box-shadow:0 0 20px rgba(124,58,237,.2);}
-  .player.active::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
-    background:linear-gradient(90deg,var(--accent),var(--accent2));}
+  .player.active::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));}
   .player-sym{font-size:22px;font-weight:700;font-family:'Syne',sans-serif;}
   .player-x .player-sym{color:var(--x);}
   .player-o .player-sym{color:var(--o);}
-  .player-name{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:1px;
-    text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .player-name{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .player-score{font-size:18px;font-weight:700;margin-top:4px;}
   .vs{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1px;}
-  .status{font-size:13px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;
-    height:20px;text-align:center;animation:fadeUp .5s ease .2s both;}
+
+  .status{font-size:13px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;height:20px;text-align:center;animation:fadeUp .5s ease .2s both;}
   .status.your-turn{color:var(--accent2);}
   .status.win{color:var(--o);}
   .status.lose{color:var(--x);}
   .status.draw{color:var(--accent);}
+
   .board-wrap{position:relative;animation:scaleIn .4s ease .3s both;}
-  .board{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:16px;
-    background:var(--surface);border:1px solid var(--border);border-radius:20px;}
-  .cell{width:88px;height:88px;background:var(--bg);border:1px solid var(--border);
-    border-radius:12px;display:flex;align-items:center;justify-content:center;
-    cursor:pointer;transition:all .2s;font-family:'Syne',sans-serif;font-size:36px;
-    font-weight:800;user-select:none;}
-  .cell:hover:not(.taken):not(.disabled){border-color:var(--accent);
-    background:rgba(124,58,237,.05);transform:scale(1.02);}
+  .board{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:20px;}
+  .cell{width:88px;height:88px;background:var(--bg);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-family:'Syne',sans-serif;font-size:36px;font-weight:800;user-select:none;}
+  .cell:hover:not(.taken):not(.disabled){border-color:var(--accent);background:rgba(124,58,237,.05);transform:scale(1.02);}
   .cell:active:not(.taken):not(.disabled){transform:scale(.97);}
   .cell.x{color:var(--x);animation:popIn .2s ease;}
   .cell.o{color:var(--o);animation:popIn .2s ease;}
-  .cell.win-cell{border-color:var(--accent);background:rgba(124,58,237,.1);
-    box-shadow:0 0 15px rgba(124,58,237,.4);animation:winPulse .6s ease;}
+  .cell.win-cell{border-color:var(--accent);background:rgba(124,58,237,.1);box-shadow:0 0 15px rgba(124,58,237,.4);animation:winPulse .6s ease;}
   .cell.disabled{cursor:not-allowed;opacity:.7;}
-  .result-overlay{display:none;position:absolute;inset:0;background:rgba(10,10,15,.9);
-    border-radius:20px;align-items:center;justify-content:center;flex-direction:column;
-    gap:8px;backdrop-filter:blur(6px);}
+
+  .result-overlay{display:none;position:absolute;inset:0;background:rgba(10,10,15,.92);border-radius:20px;align-items:center;justify-content:center;flex-direction:column;gap:8px;backdrop-filter:blur(6px);}
   .result-overlay.show{display:flex;animation:fadeIn .4s ease;}
   .result-emoji{font-size:48px;animation:bounceIn .5s ease;}
-  .result-text{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;text-align:center;}
+  .result-text{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;text-align:center;}
   .result-sub{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
+
   .btn-row{display:flex;gap:10px;width:100%;animation:fadeUp .5s ease .4s both;}
-  .btn{flex:1;padding:14px;border-radius:12px;border:none;font-family:'Space Mono',monospace;
-    font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .2s;}
-  .btn-primary{background:linear-gradient(135deg,var(--accent),#5b21b6);color:white;
-    box-shadow:0 4px 15px rgba(124,58,237,.3);}
+  .btn{flex:1;padding:13px;border-radius:12px;border:none;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .2s;}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),#5b21b6);color:white;box-shadow:0 4px 15px rgba(124,58,237,.3);}
   .btn-primary:hover{transform:translateY(-1px);}
   .btn-secondary{background:var(--surface);color:var(--muted);border:1px solid var(--border);}
-  .btn-secondary:hover{border-color:var(--accent);color:var(--text);}
+  .btn-secondary:hover{border-color:var(--x);color:var(--x);}
 
   @keyframes fadeDown{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:none}}
   @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
@@ -124,22 +102,22 @@
   <div class="wait-icon">⚔️</div>
   <div>
     <div class="wait-title">Tic Tac Toe</div>
-    <div class="wait-sub" style="margin-top:6px">Waiting for opponent...</div>
+    <div class="wait-sub" id="waitSub">Waiting for opponent...</div>
   </div>
   <div class="wait-card">
     <div class="wait-card-title">Players</div>
     <div class="wait-player">
-      <div class="wait-sym x" id="wsymX">X</div>
+      <div class="wait-sym x">X</div>
       <div class="wait-name" id="wnameX">Player X</div>
       <div class="pulse-dot" style="background:var(--o)"></div>
     </div>
     <div class="wait-player">
-      <div class="wait-sym o" id="wsymO">O</div>
+      <div class="wait-sym o">O</div>
       <div class="wait-name muted" id="wnameO">Waiting...</div>
       <div class="pulse-dot"></div>
     </div>
   </div>
-  <div class="spinner-row">
+  <div class="spinner-row" id="spinnerRow">
     <div class="spinner"></div>
     <span>Waiting for opponent to join</span>
   </div>
@@ -149,8 +127,18 @@
 <div class="game-screen" id="gameScreen" style="display:none">
   <div class="header">
     <div class="title">Tic Tac Toe</div>
-    <div class="subtitle">May the best player win</div>
+    <div class="round-info" id="roundInfo">Round 1 of 3</div>
   </div>
+
+  <!-- Round dots -->
+  <div class="rounds-bar" id="roundsBar">
+    <div class="round-dot" id="rd0"></div>
+    <div class="round-sep">·</div>
+    <div class="round-dot" id="rd1"></div>
+    <div class="round-sep">·</div>
+    <div class="round-dot" id="rd2"></div>
+  </div>
+
   <div class="players">
     <div class="player player-x active" id="playerX">
       <div class="player-sym">X</div>
@@ -164,18 +152,20 @@
       <div class="player-score" id="scoreO">0</div>
     </div>
   </div>
+
   <div class="status your-turn" id="status">Your Turn</div>
+
   <div class="board-wrap">
     <div class="board" id="board">
-      <div class="cell" data-i="0" onclick="move(0)"></div>
-      <div class="cell" data-i="1" onclick="move(1)"></div>
-      <div class="cell" data-i="2" onclick="move(2)"></div>
-      <div class="cell" data-i="3" onclick="move(3)"></div>
-      <div class="cell" data-i="4" onclick="move(4)"></div>
-      <div class="cell" data-i="5" onclick="move(5)"></div>
-      <div class="cell" data-i="6" onclick="move(6)"></div>
-      <div class="cell" data-i="7" onclick="move(7)"></div>
-      <div class="cell" data-i="8" onclick="move(8)"></div>
+      <div class="cell" onclick="move(0)"></div>
+      <div class="cell" onclick="move(1)"></div>
+      <div class="cell" onclick="move(2)"></div>
+      <div class="cell" onclick="move(3)"></div>
+      <div class="cell" onclick="move(4)"></div>
+      <div class="cell" onclick="move(5)"></div>
+      <div class="cell" onclick="move(6)"></div>
+      <div class="cell" onclick="move(7)"></div>
+      <div class="cell" onclick="move(8)"></div>
     </div>
     <div class="result-overlay" id="resultOverlay">
       <div class="result-emoji" id="resultEmoji">🏆</div>
@@ -183,9 +173,10 @@
       <div class="result-sub" id="resultSub">Well played</div>
     </div>
   </div>
+
   <div class="btn-row">
     <button class="btn btn-secondary" onclick="quitGame()">Quit</button>
-    <button class="btn btn-primary" id="newRoundBtn" style="display:none" onclick="newRound()">Next Round</button>
+    <button class="btn btn-primary" id="nextBtn" style="display:none" onclick="nextRound()">Next Round</button>
   </div>
 </div>
 
@@ -193,23 +184,16 @@
 const tg = window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();}
 
-// Read startapp parameter from Telegram Mini App
+// Parse startapp
 const tgStartParam = tg?.initDataUnsafe?.start_param || '';
-let gameId, playerId, symbol, nameX, nameO, apiUrl;
+let gameId, playerId, symbol='X', nameX='Player X', nameO='Waiting...', apiUrl='';
 
-// Parse startapp format: GAME_ID_CREATOR_ID
 if(tgStartParam && tgStartParam.includes('_')){
-  const parts    = tgStartParam.split('_');
-  gameId         = parts[0];
-  const creatorId = parts[1];
-  // Current user from Telegram
+  const parts = tgStartParam.split('_');
+  gameId   = parts[0];
   playerId = String(tg?.initDataUnsafe?.user?.id || '0');
-  apiUrl   = window._API_URL || 'https://web-production-a0396.up.railway.app';
-  nameX    = 'Player X';
-  nameO    = 'Waiting...';
-  symbol   = 'X'; // Will be updated from server
+  apiUrl   = 'https://web-production-a0396.up.railway.app';
 } else {
-  // Fallback to URL params or injected globals
   const params = new URLSearchParams(window.location.search);
   gameId   = window._GAME_ID   || params.get('game_id');
   playerId = window._PLAYER_ID || params.get('player_id') || String(tg?.initDataUnsafe?.user?.id||'0');
@@ -223,38 +207,44 @@ const WIN_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]
 
 let state={
   board:Array(9).fill(null),current:'X',mySymbol:symbol,
-  scores:{X:0,O:0},gameOver:false,names:{X:nameX,O:nameO}
+  scores:{X:0,O:0},rounds:{X:0,O:0},round:1,
+  gameOver:false,names:{X:nameX,O:nameO}
 };
 
-// Init waiting screen
+// Update waiting screen
 document.getElementById('wnameX').textContent = nameX;
 document.getElementById('wnameO').textContent = nameO;
 
-// Auto join via /join endpoint
+// Init
 async function initGame(){
-  if(!gameId || !playerId || playerId==='0'){
-    pollWaiting(); return;
-  }
+  if(!gameId||!playerId||playerId==='0'){ pollWaiting(); return; }
   try{
-    const userName = encodeURIComponent(tg?.initDataUnsafe?.user?.first_name || 'Player');
+    const userName = encodeURIComponent(tg?.initDataUnsafe?.user?.first_name||'Player');
     const r = await fetch(`${apiUrl}/join?game_id=${gameId}&pid=${playerId}&name=${userName}`);
     const data = await r.json();
+    if(data.error==='start_required'){
+      document.getElementById('waitSub').textContent = 'Please /start the bot first!';
+      document.getElementById('spinnerRow').style.display='none';
+      return;
+    }
+    if(data.error==='expired'){
+      document.getElementById('waitSub').textContent = 'Game expired.';
+      document.getElementById('spinnerRow').style.display='none';
+      return;
+    }
     if(data.ok){
       symbol = data.symbol;
       state.mySymbol = symbol;
+      if(data.rounds) state.rounds = data.rounds;
       if(data.status==='playing'){
-        // Get full state
         const sr = await fetch(`${apiUrl}/state?game_id=${gameId}&pid=${playerId}`);
         const sd = await sr.json();
         if(sd.players){
-          state.names.X = sd.players.X?.name || 'Player X';
-          state.names.O = sd.players.O?.name || 'Player O';
+          state.names.X = sd.players.X?.name||'Player X';
+          state.names.O = sd.players.O?.name||'Player O';
         }
         startGame();
-      } else {
-        // Waiting for opponent
-        pollWaiting();
-      }
+      } else { pollWaiting(); }
     } else { pollWaiting(); }
   } catch(e){ console.error(e); pollWaiting(); }
 }
@@ -266,8 +256,8 @@ function startGame(){
   document.getElementById('gameScreen').style.display='flex';
   document.getElementById('nameX').textContent = state.names.X;
   document.getElementById('nameO').textContent = state.names.O;
-  updateTurnUI();
-  if(symbol==='O') pollState();
+  updateUI();
+  if(state.mySymbol==='O') pollState();
 }
 
 function move(i){
@@ -278,41 +268,52 @@ function move(i){
     fetch(`${apiUrl}/move`,{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({game_id:gameId,player_id:playerId,cell:i})
+    }).then(r=>r.json()).then(data=>{
+      if(data.rounds) state.rounds=data.rounds;
+      if(data.round)  state.round=data.round;
+      if(data.round_winner){
+        handleRoundEnd(data.round_winner, data.game_winner);
+      }
     }).catch(console.error);
   }
-  const res=checkResult();
-  if(res){handleResult(res);}
-  else{state.current=state.current==='X'?'O':'X';updateTurnUI();pollState();}
 }
 
-function checkResult(){
+function handleRoundEnd(roundWinner, gameWinner){
+  if(roundWinner==='draw'){
+    showResult('🤝','Draw!','Next round...','draw');
+    setTimeout(()=>{ clearResult(); updateRoundDots(); }, 2000);
+    return;
+  }
+  // Update round scores
+  state.scores[roundWinner]++;
+  document.getElementById('scoreX').textContent=state.scores.X;
+  document.getElementById('scoreO').textContent=state.scores.O;
+  updateRoundDots();
+
+  if(gameWinner){
+    // Game over!
+    state.gameOver=true;
+    if(gameWinner===state.mySymbol){
+      showResult('🏆','You Win the Game!','Champion!','win');
+    } else {
+      showResult('😔','You Lose','Better luck next time','lose');
+    }
+    // No next round button — game finished
+  } else {
+    // Round over, next round
+    const msg = roundWinner===state.mySymbol ? 'Round Won! Next round...' : 'Round Lost! Next round...';
+    showResult(roundWinner===state.mySymbol?'✅':'❌', msg, `Round ${state.round} of 3`,'draw');
+    setTimeout(()=>{ clearResult(); state.board=Array(9).fill(null); state.current='X'; renderBoard(); updateUI(); if(state.mySymbol==='O') pollState(); }, 2500);
+  }
+}
+
+function checkResultLocal(){
   for(const[a,b,c]of WIN_LINES){
     if(state.board[a]&&state.board[a]===state.board[b]&&state.board[a]===state.board[c])
       return{winner:state.board[a],line:[a,b,c]};
   }
   if(state.board.every(Boolean))return{winner:null};
   return null;
-}
-
-function handleResult(res){
-  state.gameOver=true;
-  if(res.winner){
-    res.line.forEach(i=>document.querySelectorAll('.cell')[i].classList.add('win-cell'));
-    state.scores[res.winner]++;
-    document.getElementById('scoreX').textContent=state.scores.X;
-    document.getElementById('scoreO').textContent=state.scores.O;
-    if(res.winner===state.mySymbol) showResult('🏆','You Win!','Excellent play!','win');
-    else showResult('😔','You Lose','Better luck next time','lose');
-  } else {
-    showResult('🤝',"It's a Draw!",'Great minds think alike','draw');
-  }
-  document.getElementById('newRoundBtn').style.display='block';
-  if(apiUrl&&gameId){
-    fetch(`${apiUrl}/result`,{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({game_id:gameId,winner:res.winner,scores:state.scores})
-    }).catch(console.error);
-  }
 }
 
 function showResult(emoji,text,sub,type){
@@ -324,21 +325,18 @@ function showResult(emoji,text,sub,type){
   document.getElementById('status').className=`status ${type}`;
 }
 
-async function newRound(){
-  // Reset server state first
-  if(apiUrl && gameId){
-    try{
-      await fetch(`${apiUrl}/newround?game_id=${gameId}`);
-    } catch(e){ console.error(e); }
-  }
-  state.board=Array(9).fill(null);
-  state.gameOver=false;
-  state.current='X';
+function clearResult(){
   document.getElementById('resultOverlay').classList.remove('show');
-  document.getElementById('newRoundBtn').style.display='none';
-  document.querySelectorAll('.cell').forEach(c=>{c.className='cell';c.textContent='';});
-  updateTurnUI();
-  if(state.mySymbol==='O') pollState();
+}
+
+function updateRoundDots(){
+  const dots = [document.getElementById('rd0'),document.getElementById('rd1'),document.getElementById('rd2')];
+  let xi=0, oi=0;
+  // X wins
+  for(let i=0;i<state.scores.X;i++) if(dots[xi+oi]) { dots[xi+oi].className='round-dot x'; xi++; }
+  // O wins  
+  for(let i=0;i<state.scores.O;i++) if(dots[xi+oi]) { dots[xi+oi].className='round-dot o'; oi++; }
+  document.getElementById('roundInfo').textContent=`Round ${state.round} of 3`;
 }
 
 function renderBoard(){
@@ -350,7 +348,7 @@ function renderBoard(){
   });
 }
 
-function updateTurnUI(){
+function updateUI(){
   const myTurn=state.current===state.mySymbol&&!state.gameOver;
   document.getElementById('status').textContent=myTurn?'Your Turn':"Opponent's Turn";
   document.getElementById('status').className=`status ${myTurn?'your-turn':'waiting'}`;
@@ -359,7 +357,28 @@ function updateTurnUI(){
   renderBoard();
 }
 
-// Poll waiting screen for opponent
+async function nextRound(){
+  if(apiUrl&&gameId){
+    try{ await fetch(`${apiUrl}/newround?game_id=${gameId}`); } catch(e){}
+  }
+  state.board=Array(9).fill(null);
+  state.gameOver=false;
+  state.current='X';
+  clearResult();
+  document.getElementById('nextBtn').style.display='none';
+  updateUI();
+  if(state.mySymbol==='O') pollState();
+}
+
+async function quitGame(){
+  if(apiUrl&&gameId&&playerId){
+    try{ await fetch(`${apiUrl}/quit?game_id=${gameId}&pid=${playerId}`); } catch(e){}
+  }
+  if(tg) tg.close();
+  else location.reload();
+}
+
+// Polling
 let waitPollTimer=null;
 function pollWaiting(){
   if(!apiUrl||!gameId) return;
@@ -368,59 +387,66 @@ function pollWaiting(){
     try{
       const r=await fetch(`${apiUrl}/state?game_id=${gameId}&pid=${playerId}`);
       const data=await r.json();
-      // Get my symbol from server
       if(data.my_symbol){ symbol=data.my_symbol; state.mySymbol=symbol; }
-      // Update waiting screen names
       if(data.players){
-        const xName = data.players.X?.name || 'Player X';
-        const oName = data.players.O?.name || 'Waiting...';
-        document.getElementById('wnameX').textContent = xName;
-        document.getElementById('wnameO').textContent = oName;
-        state.names.X = xName;
-        state.names.O = oName;
+        const xn=data.players.X?.name||'Player X';
+        const on=data.players.O?.name||'Waiting...';
+        document.getElementById('wnameX').textContent=xn;
+        document.getElementById('wnameO').textContent=on;
+        state.names.X=xn; state.names.O=on;
       }
       if(data.status==='expired'){
-        document.querySelector('.wait-sub').textContent='Game expired. No one joined.';
-        document.querySelector('.spinner-row').style.display='none';
+        document.getElementById('waitSub').textContent='Game expired. No one joined.';
+        document.getElementById('spinnerRow').style.display='none';
         return;
       }
-      if(data.status==='playing' && data.players && data.players.X && data.players.O){
+      if(data.status==='playing'&&data.players&&data.players.X&&data.players.O){
         startGame();
-      } else { 
-        pollWaiting(); 
-      }
-    } catch(e){ 
-      console.error(e);
-      pollWaiting(); 
-    }
+      } else { pollWaiting(); }
+    } catch(e){ console.error(e); pollWaiting(); }
   },1500);
 }
 
-// Poll for opponent's move
 let pollTimer=null;
 function pollState(){
   if(!apiUrl||!gameId) return;
   clearTimeout(pollTimer);
   pollTimer=setTimeout(async()=>{
     try{
-      const r=await fetch(`${apiUrl}/state?game_id=${gameId}`);
+      const r=await fetch(`${apiUrl}/state?game_id=${gameId}&pid=${playerId}`);
       const data=await r.json();
-      if(data.board){
-        state.board=data.board;state.current=data.current;
-        renderBoard();
-        const res=checkResult();
-        if(res){handleResult(res);return;}
-        updateTurnUI();
-        if(state.current!==state.mySymbol) pollState();
-      } else pollState();
-    } catch{ pollState(); }
-  },1500);
-}
+      if(!data.board) { pollState(); return; }
 
-// Also expose game state in /state endpoint (add players)
-function quitGame(){
-  if(tg) tg.close();
-  else location.reload();
+      // Check if opponent quit
+      if(data.status==='finished'&&data.quit_by){
+        if(String(data.quit_by)!==String(playerId)){
+          showResult('🏆','Opponent Quit!','You Win!','win');
+          state.gameOver=true;
+        }
+        return;
+      }
+
+      state.board=data.board;
+      state.current=data.current;
+      if(data.rounds) state.rounds=data.rounds;
+      if(data.round)  state.round=data.round;
+
+      // Check for round winner from server
+      if(data.round_winner && !state.gameOver){
+        handleRoundEnd(data.round_winner, data.game_winner);
+        return;
+      }
+
+      if(data.status==='finished'&&!state.gameOver){
+        state.gameOver=true;
+        return;
+      }
+
+      renderBoard();
+      updateUI();
+      if(state.current!==state.mySymbol) pollState();
+    } catch(e){ console.error(e); pollState(); }
+  },1500);
 }
 </script>
 </body>
