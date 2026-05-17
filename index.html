@@ -190,8 +190,17 @@ async function init(){
     const r    = await fetch(`${API}/join?game_id=${gameId}&pid=${playerId}&name=${name}`);
     const d    = await r.json();
     if(d.error === 'start_required'){
-      document.getElementById('waitSub').textContent = 'Please /start the bot first!';
+      const botLink = d.bot_link || 'https://t.me/XO_VerseBot';
+      document.getElementById('waitSub').innerHTML = 
+        `Please <a href="${botLink}" style="color:var(--accent2)">start @XO_VerseBot</a> first to play!`;
       document.getElementById('spinnerRow').style.display = 'none';
+      // Show button to open bot
+      const btn = document.createElement('a');
+      btn.href = botLink;
+      btn.target = '_blank';
+      btn.style = 'background:linear-gradient(135deg,var(--accent),#5b21b6);color:white;padding:14px 28px;border-radius:12px;font-family:Space Mono,monospace;font-size:12px;font-weight:700;letter-spacing:1px;text-decoration:none;text-transform:uppercase;';
+      btn.textContent = '▶ Start Bot';
+      document.getElementById('waitingScreen').appendChild(btn);
       return;
     }
     if(d.error === 'expired'){
@@ -219,10 +228,10 @@ init();
 // ---- APPLY SERVER STATE ----
 function applyState(d){
   if(!d || d.error) return;
-  board   = d.board || board;
-  current = d.current || current;
-  if(d.rounds) rounds = d.rounds;
-  if(d.round)  round  = d.round;
+  if(d.board)   board   = d.board;
+  if(d.current) current = d.current;
+  if(d.rounds)  rounds  = d.rounds;
+  if(d.round)   round   = d.round;
   if(d.players){
     names.X = d.players.X?.name || 'Player X';
     names.O = d.players.O?.name || 'Player O';
