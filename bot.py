@@ -45,7 +45,6 @@ def db_save_user(uid, name):
 
 def db_add_win(uid, name):
     if db is None:
-        # In-memory fallback
         if uid not in users: users[uid] = {"name": name, "weekly_wins": 0, "total_wins": 0}
         users[uid]["weekly_wins"] = users[uid].get("weekly_wins", 0) + 1
         users[uid]["total_wins"]  = users[uid].get("total_wins", 0) + 1
@@ -55,6 +54,7 @@ def db_add_win(uid, name):
             {"$inc": {"weekly_wins": 1, "total_wins": 1},
              "$set":  {"name": name}},
             upsert=True)
+        db.stats.update_one({"_id": "global"}, {"$inc": {"total_wins": 1}}, upsert=True)
     except Exception as e: logging.error(f"db_add_win: {e}")
 
 def db_get_weekly_top(limit=5):
@@ -83,8 +83,24 @@ def db_save_game(game):
 
 def db_inc_games(uid):
     if db is None: return
-    try: db.users.update_one({"_id": uid}, {"$inc": {"games_played": 1}})
+    try:
+        db.users.update_one({"_id": uid}, {"$inc": {"games_played": 1}})
+        db.stats.update_one({"_id": "global"}, {"$inc": {"total_games": 1}}, upsert=True)
     except: pass
+
+def db_get_total_games():
+    if db is None: return stats["total_games"]
+    try:
+        r = db.stats.find_one({"_id": "global"})
+        return r.get("total_games", 0) if r else 0
+    except: return 0
+
+def db_get_total_wins():
+    if db is None: return 0
+    try:
+        r = db.stats.find_one({"_id": "global"})
+        return r.get("total_wins", 0) if r else 0
+    except: return 0
 
 def db_get_top_players(limit=5):
     if db is None: return []
@@ -199,16 +215,19 @@ def cmd_start(msg):
 # ============================================================
 def cmd_stats(msg):
     if msg["from"]["id"]!=OWNER_ID: return
-    active   = sum(1 for g in games.values() if g["status"]=="playing")
-    waiting  = sum(1 for g in games.values() if g["status"]=="waiting")
-    all_users = db_get_all_users() or list(users.values())
-    top      = db_get_top_players(5)
-    top_txt  = "\n".join(f"  {i+1}. {p.get('name','?')} — {p.get('games_played',0)} games"
-                         for i,p in enumerate(top)) or "  No data yet"
+    active     = sum(1 for g in games.values() if g["status"]=="playing")
+    waiting    = sum(1 for g in games.values() if g["status"]=="waiting")
+    all_users  = db_get_all_users() or list(users.values())
+    top        = db_get_top_players(5)
+    top_txt    = "\n".join(f"  {i+1}. {p.get('name','?')} — {p.get('games_played',0)} games"
+                           for i,p in enumerate(top)) or "  No data yet"
+    total_games = db_get_total_games()
+    total_wins  = db_get_total_wins()
     send(msg["chat"]["id"],
         f"📊 <b>Bot Statistics</b>\n\n"
         f"👥 Total Users: <b>{len(all_users)}</b>\n"
-        f"🎮 Total Games: <b>{stats['total_games']}</b>\n"
+        f"🎮 Total Games: <b>{total_games}</b>\n"
+        f"🏆 Total Wins: <b>{total_wins}</b>\n"
         f"▶️ Active Games: <b>{active}</b>\n"
         f"⏳ Waiting Games: <b>{waiting}</b>\n"
         f"🚫 Banned: <b>{len(banned)}</b>\n"
@@ -483,13 +502,21 @@ class Handler(BaseHTTPRequestHandler):
                 for sym,p in game["players"].items():
                     players_out[sym] = {"id": p["id"], "name": p["name"]} if p else None
                     if p and str(p["id"])==str(pid): my_symbol=sym
-                # If player not in game yet → they are joiner
                 if not my_symbol and game["status"]=="waiting":
-                    # Assign them the empty slot
                     for sym,p in game["players"].items():
                         if p is None: my_symbol=sym; break
-                self.json_res({"board":game["board"],"current":game["current"],
-                    "status":game["status"],"players":players_out,"my_symbol":my_symbol})
+                self.json_res({
+                    "board":     game["board"],
+                    "current":   game["current"],
+                    "status":    game["status"],
+                    "players":   players_out,
+                    "my_symbol": my_symbol,
+                    "rounds":    game.get("rounds", {"X":0,"O":0}),
+                    "round":     game.get("round", 1),
+                    "quit_by":   game.get("quit_by"),
+                    "round_winner": game.get("last_round_winner"),
+                    "game_winner":  game.get("game_winner")
+                })
             else: self.json_res({"error":"not found"},404)
         elif parsed.path=="/health":
             self.json_res({"ok":True})
@@ -597,49 +624,68 @@ window._API_URL="{APP_URL}";
             self.json_res({"ok":True})
 
         elif parsed.path=="/move":
-            gid=data.get("game_id"); pid=data.get("player_id"); cell=data.get("cell")
-            game=games.get(gid)
-            if not game or game["status"]!="playing": self.json_res({"error":"invalid"},400); return
-            curr=game["players"][game["current"]]
-            if str(curr["id"])!=str(pid): self.json_res({"error":"not your turn"},403); return
-            if game["board"][cell] is not None: self.json_res({"error":"taken"},400); return
-            game["board"][cell]=game["current"]; stats["total_moves"]+=1
-            res=check_winner(game["board"])
+            gid  = data.get("game_id")
+            pid  = data.get("player_id")
+            cell = data.get("cell")
+            game = games.get(gid)
+            if not game or game["status"]!="playing":
+                self.json_res({"error":"invalid","status":game["status"] if game else "not_found"}); return
+            curr = game["players"][game["current"]]
+            if str(curr["id"])!=str(pid):
+                self.json_res({"error":"not your turn","current":game["current"]}); return
+            if game["board"][cell] is not None:
+                self.json_res({"error":"taken"}); return
+
+            # Make move
+            game["board"][cell] = game["current"]
+            stats["total_moves"] += 1
+
+            def make_response(extra={}):
+                r = {
+                    "ok": True,
+                    "board": game["board"],
+                    "current": game["current"],
+                    "rounds": game.get("rounds", {"X":0,"O":0}),
+                    "round": game.get("round", 1),
+                    "status": game["status"]
+                }
+                r.update(extra)
+                return r
+
+            res = check_winner(game["board"])
+
             if res and res != "draw":
-                game["rounds"][res] = game["rounds"].get(res,0) + 1
-                game["round"]       = game.get("round",1) + 1
-                # Check if someone won 2 rounds (best of 3)
+                # Round winner
+                game["rounds"][res] = game["rounds"].get(res, 0) + 1
                 if game["rounds"][res] >= 2:
+                    # Game over — someone won 2 rounds
                     game["status"] = "finished"
-                    # Track final game winner
-                    winner_player = game["players"].get(res)
+                    winner_player  = game["players"].get(res)
                     if winner_player:
                         db_add_win(winner_player["id"], winner_player["name"])
                     db_save_game(game)
-                    self.json_res({"ok":True,"board":game["board"],"current":game["current"],
-                        "round_winner":res,"game_winner":res,"rounds":game["rounds"],"status":"finished"})
-                    return
+                    self.json_res(make_response({"round_winner": res, "game_winner": res}))
                 else:
                     # Next round
+                    game["round"]   = game.get("round", 1) + 1
                     game["board"]   = [None]*9
                     game["current"] = "X"
                     db_save_game(game)
-                    self.json_res({"ok":True,"board":game["board"],"current":game["current"],
-                        "round_winner":res,"rounds":game["rounds"],"round":game["round"],"status":"playing"})
-                    return
+                    self.json_res(make_response({"round_winner": res}))
+
             elif res == "draw":
+                # Draw — next round
+                game["round"]   = game.get("round", 1) + 1
                 game["board"]   = [None]*9
                 game["current"] = "X"
-                game["round"]   = game.get("round",1) + 1
                 db_save_game(game)
-                self.json_res({"ok":True,"board":game["board"],"current":game["current"],
-                    "round_winner":"draw","rounds":game["rounds"],"round":game["round"],"status":"playing"})
-                return
+                self.json_res(make_response({"round_winner": "draw"}))
+
             else:
-                game["current"]="O" if game["current"]=="X" else "X"
+                # Normal move — switch turn
+                game["current"] = "O" if game["current"]=="X" else "X"
                 db_save_game(game)
-            self.json_res({"ok":True,"board":game["board"],"current":game["current"],
-                "rounds":game.get("rounds",{"X":0,"O":0}),"round":game.get("round",1),"status":game["status"]})
+                self.json_res(make_response())
 
         elif parsed.path=="/result":
             gid    = data.get("game_id")
