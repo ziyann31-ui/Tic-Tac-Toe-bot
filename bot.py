@@ -280,10 +280,12 @@ def cmd_broadcast(msg):
     if msg["from"]["id"]!=OWNER_ID: return
     text = msg.get("text","").replace("/broadcast","").strip()
     if not text: send(msg["chat"]["id"],"Usage: /broadcast &lt;message&gt;"); return
+    # Only send to users who have /started the bot
     all_u = db_get_all_users() or []
     uids  = [u.get("_id") for u in all_u] if all_u else list(users.keys())
     count = 0
     for uid in uids:
+        if not uid: continue
         try: send(uid,f"📢 <b>Announcement</b>\n\n{text}"); count+=1; time.sleep(0.05)
         except: pass
     send(msg["chat"]["id"],f"✅ Broadcast sent to <b>{count}</b> users.")
@@ -330,8 +332,8 @@ def cmd_resetleaderboard(msg):
     send(msg["chat"]["id"],"✅ Weekly leaderboard reset!")
 
 def broadcast_leaderboard():
-    text = build_leaderboard_text()
-    # Send to all groups
+    text  = build_leaderboard_text()
+    # Send to all groups where bot is added
     groups = db_get_groups()
     count  = 0
     for g in groups:
@@ -340,14 +342,16 @@ def broadcast_leaderboard():
             count += 1
             time.sleep(0.1)
         except: pass
-    # Send to all users too
+    # Send to all users who have /started the bot
     all_u = db_get_all_users() or []
     for u in all_u:
+        uid = u.get("_id")
+        if not uid: continue
         try:
-            api("sendMessage", chat_id=u.get("_id"), text=text, parse_mode="HTML")
+            api("sendMessage", chat_id=uid, text=text, parse_mode="HTML")
             time.sleep(0.05)
         except: pass
-    logging.info(f"Leaderboard sent to {count} groups")
+    logging.info(f"Leaderboard sent to {count} groups + {len(all_u)} users")
 
 # ============================================================
 #                     INLINE QUERY
@@ -550,8 +554,11 @@ class Handler(BaseHTTPRequestHandler):
             if not game: self.json_res({"error":"not found"},404); return
             if game["status"]=="expired": self.json_res({"error":"expired"},410); return
             # Check /start requirement
-            if str(pid) not in [str(u) for u in users]:
-                self.json_res({"error":"start_required"},403); return
+            uid_int = int(pid) if pid and pid.isdigit() else None
+            started = uid_int and (uid_int in users or (db is not None and db.users.find_one({"_id": uid_int})))
+            if not started:
+                bot_link = f"https://t.me/{BOT_USERNAME}?start=1"
+                self.json_res({"error":"start_required","bot_link":bot_link,"message":f"Please start @{BOT_USERNAME} first to play!"},403); return
             if game["status"]!="waiting":
                 for sym,p in game["players"].items():
                     if p and str(p["id"])==str(pid):
