@@ -493,37 +493,55 @@ class Handler(BaseHTTPRequestHandler):
             else: self.json_res({"error":"not found"},404)
         elif parsed.path=="/health":
             self.json_res({"ok":True})
-        elif parsed.path=="/newround":
-            gid  = params.get("game_id",[None])[0]
+        elif parsed.path=="/quit":
+            gid = params.get("game_id",[None])[0]
+            pid = params.get("pid",[None])[0]
             game = games.get(gid)
             if not game: self.json_res({"error":"not found"},404); return
-            game["board"]   = [None]*9
-            game["current"] = "X"
-            game["status"]  = "playing"
-            db_save_game(game)
-            self.json_res({"ok":True,"board":game["board"],"current":game["current"]})
+            # Find quitter symbol
+            quitter_sym = None
+            winner_sym  = None
+            for sym,p in game["players"].items():
+                if p and str(p["id"])==str(pid): quitter_sym=sym
+            if quitter_sym:
+                winner_sym = "O" if quitter_sym=="X" else "X"
+                game["status"] = "finished"
+                game["quit_by"] = pid
+                # Track winner
+                winner_player = game["players"].get(winner_sym)
+                if winner_player:
+                    db_add_win(winner_player["id"], winner_player["name"])
+                db_save_game(game)
+            self.json_res({"ok":True,"winner":winner_sym,"quit_by":quitter_sym})
         elif parsed.path=="/join":
-            gid  = params.get("game_id",[None])[0]
-            pid  = params.get("pid",[None])[0]
-            name = params.get("name",["Player"])[0]
-            game = games.get(gid)
+            gid      = params.get("game_id",[None])[0]
+            pid      = params.get("pid",[None])[0]
+            name     = params.get("name",["Player"])[0]
+            chat_id  = params.get("chat_id",[None])[0]
+            msg_id   = params.get("msg_id",[None])[0]
+            game     = games.get(gid)
             if not game: self.json_res({"error":"not found"},404); return
-            if game["status"]!="waiting": 
-                # Already joined — return their symbol
+            if game["status"]=="expired": self.json_res({"error":"expired"},410); return
+            # Check /start requirement
+            if str(pid) not in [str(u) for u in users]:
+                self.json_res({"error":"start_required"},403); return
+            if game["status"]!="waiting":
                 for sym,p in game["players"].items():
                     if p and str(p["id"])==str(pid):
-                        self.json_res({"ok":True,"symbol":sym,"status":game["status"]}); return
+                        self.json_res({"ok":True,"symbol":sym,"status":game["status"],"rounds":game.get("rounds",{"X":0,"O":0}),"round":game.get("round",1)}); return
                 self.json_res({"error":"game in progress"},400); return
-            # Check if already creator
             creator_sym = game.get("creator_sym","X")
             if str(pid)==str(game.get("creator_id")):
-                self.json_res({"ok":True,"symbol":creator_sym,"status":game["status"]}); return
-            # Join as second player
+                if chat_id: game["chat_id"] = int(chat_id)
+                if msg_id:  game["msg_id"]  = int(msg_id)
+                self.json_res({"ok":True,"symbol":creator_sym,"status":game["status"],"rounds":game.get("rounds",{"X":0,"O":0}),"round":game.get("round",1)}); return
             joiner_sym = "O" if game["players"].get("X") else "X"
             game["players"][joiner_sym] = {"id":int(pid),"name":requests.utils.unquote(name)}
             game["status"] = "playing"
+            if chat_id: game["chat_id"] = int(chat_id)
+            if msg_id:  game["msg_id"]  = int(msg_id)
             db_save_game(game)
-            self.json_res({"ok":True,"symbol":joiner_sym,"status":"playing"})
+            self.json_res({"ok":True,"symbol":joiner_sym,"status":"playing","rounds":game.get("rounds",{"X":0,"O":0}),"round":game.get("round",1)})
         elif parsed.path.startswith("/game/"):
             gid  = parsed.path.split("/game/")[1]
             game = games.get(gid)
@@ -587,16 +605,41 @@ window._API_URL="{APP_URL}";
             if game["board"][cell] is not None: self.json_res({"error":"taken"},400); return
             game["board"][cell]=game["current"]; stats["total_moves"]+=1
             res=check_winner(game["board"])
-            if res:
-                game["status"]="finished"
+            if res and res != "draw":
+                game["rounds"][res] = game["rounds"].get(res,0) + 1
+                game["round"]       = game.get("round",1) + 1
+                # Check if someone won 2 rounds (best of 3)
+                if game["rounds"][res] >= 2:
+                    game["status"] = "finished"
+                    # Track final game winner
+                    winner_player = game["players"].get(res)
+                    if winner_player:
+                        db_add_win(winner_player["id"], winner_player["name"])
+                    db_save_game(game)
+                    self.json_res({"ok":True,"board":game["board"],"current":game["current"],
+                        "round_winner":res,"game_winner":res,"rounds":game["rounds"],"status":"finished"})
+                    return
+                else:
+                    # Next round
+                    game["board"]   = [None]*9
+                    game["current"] = "X"
+                    db_save_game(game)
+                    self.json_res({"ok":True,"board":game["board"],"current":game["current"],
+                        "round_winner":res,"rounds":game["rounds"],"round":game["round"],"status":"playing"})
+                    return
+            elif res == "draw":
+                game["board"]   = [None]*9
+                game["current"] = "X"
+                game["round"]   = game.get("round",1) + 1
                 db_save_game(game)
-                if game["chat_id"] and game["msg_id"]:
-                    api("editMessageText",chat_id=game["chat_id"],message_id=game["msg_id"],
-                        text=game_text(game),parse_mode="HTML")
+                self.json_res({"ok":True,"board":game["board"],"current":game["current"],
+                    "round_winner":"draw","rounds":game["rounds"],"round":game["round"],"status":"playing"})
+                return
             else:
                 game["current"]="O" if game["current"]=="X" else "X"
                 db_save_game(game)
-            self.json_res({"ok":True,"board":game["board"],"current":game["current"]})
+            self.json_res({"ok":True,"board":game["board"],"current":game["current"],
+                "rounds":game.get("rounds",{"X":0,"O":0}),"round":game.get("round",1),"status":game["status"]})
 
         elif parsed.path=="/result":
             gid    = data.get("game_id")
