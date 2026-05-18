@@ -575,6 +575,21 @@ class Handler(BaseHTTPRequestHandler):
             if chat_id: game["chat_id"] = int(chat_id)
             if msg_id:  game["msg_id"]  = int(msg_id)
             db_save_game(game)
+
+            # Update group message — game started
+            if game.get("chat_id") and game.get("msg_id"):
+                px = game["players"]["X"]["name"] if game["players"].get("X") else "?"
+                po = game["players"]["O"]["name"] if game["players"].get("O") else "?"
+                mini_app_url = f"https://t.me/{BOT_USERNAME}/XOverse?startapp={game['id']}_{game['creator_id']}"
+                api("editMessageText",
+                    chat_id=game["chat_id"],
+                    message_id=game["msg_id"],
+                    text=f"\U0001f3ae <b>Game Started!</b>\n\nPlaying as <b>X:</b> {px}\nPlaying as <b>O:</b> {po}\n\n<i>Click the button below to open the game.</i>",
+                    parse_mode="HTML",
+                    reply_markup={"inline_keyboard":[[
+                        {"text":"🎮 Open Game","url": mini_app_url}
+                    ]]})
+
             self.json_res({"ok":True,"symbol":joiner_sym,"status":"playing","rounds":game.get("rounds",{"X":0,"O":0}),"round":game.get("round",1)})
         elif parsed.path.startswith("/game/"):
             gid  = parsed.path.split("/game/")[1]
@@ -647,6 +662,10 @@ window._API_URL="{APP_URL}";
             game["board"][cell] = game["current"]
             stats["total_moves"] += 1
 
+            # Ensure rounds always initialized
+            if "rounds" not in game: game["rounds"] = {"X":0,"O":0}
+            if "round"  not in game: game["round"]  = 1
+
             def make_response(extra={}):
                 r = {
                     "ok": True,
@@ -660,17 +679,41 @@ window._API_URL="{APP_URL}";
                 return r
 
             res = check_winner(game["board"])
+            logging.info(f"Move result: cell={cell}, symbol={game['board'][cell]}, winner={res}, board={game['board']}")
 
             if res and res != "draw":
                 # Round winner
                 game["rounds"][res] = game["rounds"].get(res, 0) + 1
                 if game["rounds"][res] >= 2:
                     # Game over — someone won 2 rounds
-                    game["status"] = "finished"
-                    winner_player  = game["players"].get(res)
+                    game["status"]      = "finished"
+                    game["game_winner"] = res
+                    winner_player       = game["players"].get(res)
+                    loser_sym           = "O" if res=="X" else "X"
+                    loser_player        = game["players"].get(loser_sym)
                     if winner_player:
                         db_add_win(winner_player["id"], winner_player["name"])
                     db_save_game(game)
+
+                    # Update group message — game over
+                    if game.get("chat_id") and game.get("msg_id"):
+                        mini_app_url = f"https://t.me/{BOT_USERNAME}/XOverse?startapp={game['id']}_{game['creator_id']}"
+                        api("editMessageText",
+                            chat_id=game["chat_id"],
+                            message_id=game["msg_id"],
+                            text=(
+                                "\U0001f3c6 <b>Game Over!</b>\n\n"
+                                f"<b>{winner_player['name'] if winner_player else '?'}</b> wins the game!\n\n"
+                                f"<b>X:</b> {game['players']['X']['name'] if game['players'].get('X') else '?'}\n"
+                                f"<b>O:</b> {game['players']['O']['name'] if game['players'].get('O') else '?'}\n\n"
+                                f"<i>To create a new game, type @{BOT_USERNAME} in any chat.</i>"
+                            ),
+                            parse_mode="HTML",
+                            reply_markup={"inline_keyboard":[
+                                [{"text":"Play Again ↗","switch_inline_query":"play"}],
+                                [{"text":"Play with Someone Else ↗","switch_inline_query":"play"}]
+                            ]})
+
                     self.json_res(make_response({"round_winner": res, "game_winner": res}))
                 else:
                     # Next round
