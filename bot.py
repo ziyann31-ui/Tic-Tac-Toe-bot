@@ -684,6 +684,7 @@ window._API_URL="{APP_URL}";
             if res and res != "draw":
                 # Round winner
                 game["rounds"][res] = game["rounds"].get(res, 0) + 1
+                game["last_round_winner"] = res
                 if game["rounds"][res] >= 2:
                     # Game over — someone won 2 rounds
                     game["status"]      = "finished"
@@ -717,23 +718,33 @@ window._API_URL="{APP_URL}";
                     self.json_res(make_response({"round_winner": res, "game_winner": res}))
                 else:
                     # Next round
+                    winning_board = game["board"][:]
+                    game["last_round_winner"] = res
                     game["round"]   = game.get("round", 1) + 1
                     game["board"]   = [None]*9
                     game["current"] = "X"
                     db_save_game(game)
+                    resp = make_response({"round_winner": res})
+                    resp["board"] = winning_board
+                    self.json_res(resp)
                     self.json_res(make_response({"round_winner": res}))
 
             elif res == "draw":
                 # Draw — next round
+                game["last_round_winner"] = "draw"
+                draw_board      = game["board"][:]
                 game["round"]   = game.get("round", 1) + 1
                 game["board"]   = [None]*9
                 game["current"] = "X"
                 db_save_game(game)
-                self.json_res(make_response({"round_winner": "draw"}))
+                resp = make_response({"round_winner": "draw"})
+                resp["board"] = draw_board
+                self.json_res(resp)
 
             else:
                 # Normal move — switch turn
                 game["current"] = "O" if game["current"]=="X" else "X"
+                game["last_round_winner"] = None
                 db_save_game(game)
                 self.json_res(make_response())
 
